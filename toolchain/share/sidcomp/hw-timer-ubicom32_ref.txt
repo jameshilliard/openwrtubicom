@@ -1,0 +1,377 @@
+      hw-timer-ubicom32/ref-generic (libtimers.la :: timer_component_library)
+
+Synopsis:
+
+   Generic Timer
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+   This component models the Ubicom IP3000 generic multi-function timers. The
+   IP3000 has four generic timers (timer1, timer2, timer3, and timer4). The
+   configuration must create four instances of a generic timer.
+
+   +--------------------------------------------------------+
+   |                       Behaviors                        |
+   |--------------------------------------------------------|
+   |   resetting|Upon construction, or when the reset input |
+   |            |pin is driven, or when the timer_enable pin|
+   |            |is driven such that the timer is enabled,  |
+   |            |the timer is reset to a power-up state.    |
+   |            |This includes deasserting the interrupt    |
+   |            |line.                                      |
+   |            |                                           |
+   |            |The timer-enable input pin is driven from  |
+   |            |the cpu whenever the glbl_ctrl register    |
+   |            |timer enable bit (bit 1) changes. Driving  |
+   |            |the pin low will power-down the timer.     |
+   |            |                                           |
+   |            |The counter-reset input pin (txrst) causes |
+   |            |just txcnt to be reset.                    |
+   |            |                                           |
+   |            |In pwm-timer mode, changes made to TxCMP1  |
+   |            |and TxCMP2/TxCAP2 are not activated until  |
+   |            |the counter resets. Any of the above resets|
+   |            |causes the TxCMP1 and TxCMP2 values to     |
+   |            |become active in the current pwm cycle.    |
+   |------------+-------------------------------------------|
+   |    clocking|The 'generic' hw-timer-ubicom32/ref-generic    |
+   |            |timers rely on a clock pin, which is       |
+   |            |interpreted as the regular "system clock". |
+   |            |The use of an external txclk pin is not    |
+   |            |supported.                                 |
+   |            |                                           |
+   |            |It may be the case that instructions are   |
+   |            |being performed N at a time. In such a     |
+   |            |case, the setting tick-count will be set to|
+   |            |N. In this situation, clocking will be     |
+   |            |treated as if N ticks occur for every 1    |
+   |            |clock pulse. Each of the N ticks will be   |
+   |            |applied one at a time so events may occur  |
+   |            |sequentially as normal.                    |
+   |            |                                           |
+   |            |The clock is prescaled such that after x   |
+   |            |ticks, txcnt is incremented by 1. The      |
+   |            |prescale-log2 factor is found in bits 11:8 |
+   |            |of txcfg2 and the prescale value is        |
+   |            |calculated as 1 << prescale-log2.          |
+   |            |                                           |
+   |            |It should be noted that the higher the     |
+   |            |value of tick-count, the less synchronized |
+   |            |the timer will be to the cpu. For scenarios|
+   |            |where cpu/timer synchronization is         |
+   |            |imperative, tick-count should not exceed   |
+   |            |the prescale_value.                        |
+   |            |                                           |
+   |            |The value of N is specified via the        |
+   |            |--insn-count simulator option.             |
+   |------------+-------------------------------------------|
+   |interrupting|The generic timer has a number of interrupt|
+   |            |events. Interrupts are controlled by the   |
+   |            |interrupt-enable pin (txie) which actually |
+   |            |represents the appropriate txie bit in the |
+   |            |cpu tctrl (timer control) register. In     |
+   |            |addition to the interrupt-enable pin, there|
+   |            |are bits in txcfg1 which control interrupt |
+   |            |behavior: cmp1ie, cap1ie, cap2ie, and ofie.|
+   |            |                                           |
+   |            |In 'pwm-timer' mode, an interrupt is driven|
+   |            |when txcnt = txcmp1 and cmp1ie is set. An  |
+   |            |additional interrupt is driven when txcnt =|
+   |            |txcmp2/txcap2 and cmp2ie/cap2ie is set. If |
+   |            |ofie is set then an interrupt occurs if the|
+   |            |counter wraps.                             |
+   |            |                                           |
+   |            |In 'capture' mode, an interrupt is driven  |
+   |            |when the txcpi1 pin is driven with an      |
+   |            |appropriate edge and cap1ie is set. An     |
+   |            |interrupt is also driven when the txcpi2   |
+   |            |pin is driven with an appropriate edge and |
+   |            |cmp2ie/cap2ie is set. An appropriate edge  |
+   |            |refers to the cp1edg (bits 1:0) and cp2edg |
+   |            |(bits 3:2) in txcfg2. The edge can have the|
+   |            |following values: 0x00 = falling-edge, 0x01|
+   |            |= rising-edge, 0x1x = any-edge. Note that  |
+   |            |an edge represents a transition from the   |
+   |            |last state and driving with the same value |
+   |            |will not result in an edge.                |
+   |            |                                           |
+   |            |If ofie is set, then an interrupt occurs   |
+   |            |when the counter wraps.                    |
+   |------------+-------------------------------------------|
+   |    register|The registers bus provides access to a bank|
+   |      access|of 2-byte control registers. The memory map|
+   |            |for the generic timer is as follows:       |
+   |            |                                           |
+   |            |+-----------------------------------------+|
+   |            || address | read          | write         ||
+   |            ||---------+---------------+---------------||
+   |            || 0       | txcnt         | (read-only)   ||
+   |            ||---------+---------------+---------------||
+   |            || 2       | txcap1        | (read-only)   ||
+   |            ||---------+---------------+---------------||
+   |            ||         |               | (pwm-mode:    ||
+   |            || 4       | txcap2/txcmp2 | txcmp2,       ||
+   |            ||         |               | capture-mode: ||
+   |            ||         |               | read-only)    ||
+   |            ||---------+---------------+---------------||
+   |            || 6       | txcmp1        | txcmp1        ||
+   |            ||---------+---------------+---------------||
+   |            || 8       | txcfg1        | txcfg1        ||
+   |            ||---------+---------------+---------------||
+   |            || a       | txcfg2        | txcfg2        ||
+   |            |+-----------------------------------------+|
+   |            |                                           |
+   |            |At power-up, the generic timer is disabled.|
+   |            |A number of control bits in txcfg1 must be |
+   |            |used. To generally enable, the tmren bit   |
+   |            |must be set (bit 0). Note the glbl_ctl     |
+   |            |register timer enable bit must also be set |
+   |            |(bit 1). The global timer enable bit state |
+   |            |is signalled via the timer_enable pin. To  |
+   |            |enable output, the oen bit (bit 6) must be |
+   |            |set. To enable the txcpi1 pin, the cpi1en  |
+   |            |bit must be set (bit 3). To enable the     |
+   |            |txcpi2 pin, the cpi2en bit must be set (bit|
+   |            |4). The mode by default is 'pwm-timer'. To |
+   |            |get 'capture' mode the mode bit must be set|
+   |            |(bit 7).                                   |
+   |            |                                           |
+   |            |To enable an interrupt when the counter    |
+   |            |wraps, set the ofie bit (bit 15). There are|
+   |            |three other interrupt enables: cmp1ie (bit |
+   |            |12) enables interrupts when txcnt = txcmp1 |
+   |            |(pwm-timer mode). cmp2ie (bit 14) enables  |
+   |            |interrupts when txcnt = txcmp2/txcap2      |
+   |            |(pwm-timer mode). cap1ie (bit 13) enables  |
+   |            |interrupts when the txcpi1 pin is triggered|
+   |            |and the counter is captured in txcap1.     |
+   |            |cmp2ie/cap2ie works the same except that it|
+   |            |is the txcpi2 pin and the counter is       |
+   |            |captured into txcap2/txcmp2 (capture mode  |
+   |            |only).                                     |
+   |            |                                           |
+   |            |To change the prescale value (default 1),  |
+   |            |place a value (0-15) in bits 11:8 of       |
+   |            |txcfg2. To change which edge is used to    |
+   |            |trigger a txcpi1 event, use bits 1:0 of    |
+   |            |txcfg2 (0x00 = falling-edge, 0x01 =        |
+   |            |rising-edge, 0x1x = any-edge). Similarly   |
+   |            |the edge for txcpi2 can be set using bits  |
+   |            |3:2.                                       |
+   |            |                                           |
+   |            |None of the bits are sticky and            |
+   |            |combinations of options must be specified  |
+   |            |all at once.                               |
+   |            |                                           |
+   |            |It should be noted that the eclkedg and    |
+   |            |eclken bits in txcfg2 are ignored. These   |
+   |            |bits are hardware-configuration options    |
+   |            |that are not necessary for simulating the  |
+   |            |timer.                                     |
+   |            |                                           |
+   |            |The tctrl register in the cpu communicates |
+   |            |with the appropriate timer via the txrst   |
+   |            |(counter-reset) and txie (interrupt-enable)|
+   |            |pins.                                      |
+   |------------+-------------------------------------------|
+   |  outputting|The generic timer has an output pin: txout |
+   |            |which outputs when in 'pwm-timer' mode and |
+   |            |the output-enable bit: oen (bit 6) in      |
+   |            |txcfg1 is set. When txcnt = txcmp2/txcap2, |
+   |            |a high value is driven on the output pin.  |
+   |            |The counter is reset and then restarted.   |
+   |            |When txcnt = txcmp1, a low value is driven |
+   |            |on the output pin. The counter continues at|
+   |            |this point until either it wraps or txcmp2 |
+   |            |is reached. If txcmp1 = 0, then a low-value|
+   |            |is output once. If txcmp1 = txcmp2, then a |
+   |            |high-value is output once.                 |
+   +--------------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                 SID Conventions                 |
+   |-------------------------------------------------|
+   |    functional | supported | -                   |
+   |---------------+-----------+---------------------|
+   |  save/restore | supported | -                   |
+   |---------------+-----------+---------------------|
+   | triggerpoints | supported | The component       |
+   |               |           | supports            |
+   |               |           | triggerpoints set   |
+   |               |           | on any of the       |
+   |               |           | available           |
+   |               |           | attributes.         |
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components
+     * The timer's interrupt pin should be connected to the appropriate irq
+       pin of the cpu for that timer.
+
+     * This configuration file fragment illustrates how to configure the four
+       'generic' timers and connect them to the cpu:
+
+         new hw-timer-ubicom32/ref-generic timer1
+         new hw-timer-ubicom32/ref-generic timer2
+         new hw-timer-ubicom32/ref-generic timer3
+         new hw-timer-ubicom32/ref-generic timer4
+         new sid-sched-sim sched
+         connect-pin sched 0-event timer1 clock
+         connect-pin sched 0-event timer2 clock
+         connect-pin sched 0-event timer3 clock
+         connect-pin sched 0-event timer4 clock
+         connect-pin timer1 interrupt cpu irq_timer_1
+         connect-pin cpu tctrl_t1ie timer1 interrupt-enable
+         connect-pin cpu tctrl_t1rst timer1 counter-reset
+         connect-pin timer2 interrupt cpu irq_timer_2
+         connect-pin cpu tctrl_t2ie timer2 interrupt-enable
+         connect-pin cpu tctrl_t2rst timer2 counter-reset
+         connect-pin timer3 interrupt cpu irq_timer_3
+         connect-pin cpu tctrl_t3ie timer3 interrupt-enable
+         connect-pin cpu tctrl_t3rst timer3 counter-reset
+         connect-pin timer4 interrupt cpu irq_timer_4
+         connect-pin cpu tctrl_t4ie timer4 interrupt-enable
+         connect-pin cpu tctrl_t4rst timer4 counter-reset
+          
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: hw-timer-ubicom32/ref-generic
+
+   +---------------------------------------------------+
+   |                       pins                        |
+   |---------------------------------------------------|
+   |      name      |direction|legalvalues| behaviors  |
+   |----------------+---------+-----------+------------|
+   |interrupt       |out      |0 or       |interrupting|
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |interrupt-enable|in       |0 or       |interrupting|
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |timer-enable    |in       |0 or       |resetting   |
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |txcpi1          |in       |any        |interrupting|
+   |----------------+---------+-----------+------------|
+   |txcpi2          |in       |any        |interrupting|
+   |----------------+---------+-----------+------------|
+   |txie            |in       |0 or       |interrupting|
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |txout           |out      |0 or       |outputting  |
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |txrst           |in       |0 or       |resetting   |
+   |                |         |non-zero   |            |
+   |----------------+---------+-----------+------------|
+   |reset           |in       |any        |resetting   |
+   |----------------+---------+-----------+------------|
+   |clock           |in       |any        |clocking    |
+   +---------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                      buses                      |
+   |-------------------------------------------------|
+   |   name    | addresses  |  accesses  | behaviors |
+   |-----------+------------+------------+-----------|
+   | registers | 0x0 to 0xb | read/write | register  |
+   |           |            |            | access    |
+   +-------------------------------------------------+
+
+   +------------------------------------------------------------------+
+   |                            attributes                            |
+   |------------------------------------------------------------------|
+   |       name        |category |legal values |default | behaviors  ||
+   |                   |         |             | value  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |txcnt              |watchable|number       |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |txcap1             |watchable|number       |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |txcmp1             |watchable|number       |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |txcmp2/txcap2      |watchable|number       |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |global-timer-enable|watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |enabled            |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |tmren              |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cap1rst            |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cpi1en             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cpi2en             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |oen                |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cmp1if             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cap1if             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cmp2if/cap2if      |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |ofif               |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cmp1ie             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cap1ie             |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cmp2ie/cap2ie      |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |ofie               |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |mode               |watchable|`pwm-timer'  |register|            ||
+   |                   |register |or `capture' |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |prescale-log2      |watchable|0-15         |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cpi1edg            |watchable|0-3          |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cpi2edg            |watchable|0-3          |register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |cpi2cpi1           |watchable|true or false|register|            ||
+   |                   |register |             |access  |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |                   |watchable|0..1 <<      |        |            ||
+   |ticks              |register |prescale-log2|clocking|            ||
+   |                   |         |- 1          |        |            ||
+   |-------------------+---------+-------------+--------+------------||
+   |tick-count         |setting  |1-xxx        |clocking|            ||
+   |-------------------+---------+-------------+--------+------------||
+   |state-snapshot     |-        |opaque string|-       |state       ||
+   |                   |         |             |        |save/restore||
+   +------------------------------------------------------------------+

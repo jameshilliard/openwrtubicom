@@ -1,0 +1,4 @@
+             hw-ubicom32-mailbox (libmailbox.la :: mbox_component_library)
+
+Synopsis:
+	Implementation of the UBICOM32 debug port mailbox interface.

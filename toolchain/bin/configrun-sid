@@ -1,0 +1,1866 @@
+:
+# Emulate a standalone simulator.  Construct a sid configuration file
+# and run it.
+
+eval 'exec perl -S $0 ${1+"$@"}'
+    if $running_under_some_shell;
+$running_under_some_shell = 0;
+
+#use strict;
+use Getopt::Long;
+use File::Basename;
+require 5.004;
+
+%cpu_comptype = (
+		 "arm" => "hw-cpu-arm7t",
+		 "thumb" => "hw-cpu-arm7t",
+		 "x86" => "hw-cpu-x86",
+	         # INSERT NEW ENTRIES HERE
+		 "m32r" => "hw-cpu-m32r/d",
+		 "mep" => "hw-cpu-mep",
+		 "mt" => "hw-cpu-mt",
+		 "sh5" => "hw-cpu-sh5",
+		 "xstormy16" => "hw-cpu-xstormy16",
+		 "ubicom32" => "hw-cpu-ubicom32",
+		 "ubicom32mars" => "hw-cpu-ubicom32mars",
+		 "ubicom32ares" => "hw-cpu-ubicom32ares",
+		 "ubicom32jupiter" => "hw-cpu-ubicom32jupiter",
+		 );
+
+%cpu_defaultendian = (
+		      "x86" => "-EL",
+		      "m32r" => "-EB",
+		      "mt" => "-EB",
+		      "sh5" => "-EL",
+		      "xstormy16" => "-EL",
+		      "ubicom32" => "-EB",
+		      "ubicom32mars" => "-EB",
+		      "ubicom32ares" => "-EB",
+		      "ubicom32jupiter" => "-EB",
+		      );
+
+%gloss_comptype = (
+		   "arm" => "sw-gloss-arm/angel",
+		   "thumb" => "sw-gloss-arm/angel",
+		   "x86" => "sw-gloss-generic/libgloss",
+	           # INSERT NEW ENTRIES HERE
+		   "m32r" => "sw-gloss-m32r/libgloss",
+		   "mep" => "sw-gloss-generic/libgloss",
+		   "mt" => "sw-gloss-generic/libgloss",
+		   "sh5" => "sw-gloss-generic/libgloss",
+		   "xstormy16" => "sw-gloss-generic/libgloss",
+		   "ubicom32" => "sw-gloss-generic/libgloss",
+		   "ubicom32mars" => "sw-gloss-generic/libgloss",
+		   "ubicom32ares" => "sw-gloss-generic/libgloss",
+		   "ubicom32jupiter" => "sw-gloss-generic/libgloss",
+		   );
+
+%gloss_memspecs = (
+		   "arm" => "0x00000000,0x00800000",
+		   "thumb" => "0x00000000,0x00800000",
+		   "x86" => "0x00000,0x500000",
+	           # INSERT NEW ENTRIES HERE
+		   "m32r" => "0x00000000,0x00800000",
+		   "mep" => "0x00000000,0x00200000:0x00300000,0x10000",
+		   "mt" => "0x00000000,0x00800000",
+		   "sh5" => "0x00000000,0x00800000", # check this
+		   "xstormy16" => "0x00000000,0x00800000",
+		   "ubicom32" => "", # not needed; Harvard chip; handled specially
+		   "ubicom32mars" => "", # not needed; Harvard chip; handled specially
+		   "ubicom32ares" => "", # not needed; Harvard chip; handled specially
+		   "ubicom32jupiter" => "", # not needed; Harvard chip; handled specially
+		  );
+
+
+
+# ----------------------------------------------------------------------------
+# Consume argument list
+
+$opt_cpu="";
+$opt_help=0;
+$opt_version=0;
+$opt_verbose=0;
+$opt_save_temps=0;
+$opt_no_run=0;
+$opt_trace_extract=0;
+$opt_trace_semantics=0;
+$opt_trace_disassemble=0;
+$opt_trace_counter=0;
+$opt_trace_core=0;
+$opt_trace_core_visual=0;
+$opt_enable_warnings=0;
+@opt_memory_region = ();
+$opt_gdb=0;
+$opt_mailbox=0;
+$opt_persistent=0;
+$opt_gprof=0;
+$opt_tksm=0;
+$opt_board="gloss-stdio";
+$opt_engine="pbb";
+$opt_EB=0;
+$opt_EL=0;
+$opt_sidrtc="";
+$opt_sidcodec="";
+@opt_wrap = ();
+%opt_load=();
+%opt_gdbport=();
+
+$any_tcl = 0;
+
+# sid executable
+if ($ENV{'SID'}) {
+  $sid=$ENV{'SID'};
+} else {
+  $sid = dirname($0);
+  $sid .= "/sid";
+}
+
+$version=q$Id$;
+
+# by default the loader data mapper connects to the cpu-mapper access-port
+$load_mapper_data = "cpu-mapper access-port";
+
+# (see perldoc Getopt::Long)
+%options = (
+	    "help!" => ["help", "Print this help message."],
+	    "version!" => ["version", "Print wrapper / sid versions."],
+	    "cpu=s" => ["cpu=CPU   (REQUIRED)", "Select target processor.", "none"],
+	    "verbose|v!" => ["verbose|v", "Turn on various run-time verbosity settings.", "no"],
+	    "save-temps!" => ["save-temps", "Keep generated sid configuration file.", "no"],
+	    "trace-extract!" => ["trace-extract", "Turn on CPU insn decode tracing.", "no"],
+	    "trace-semantics!" => ["trace-semantics", "Turn on CPU insn execute tracing.", "no"],
+	    "trace-disassemble!" => ["trace-disassemble", "Turn on CPU insn execute disassembly.", "no"],
+	    "trace-counter!" => ["trace-counter", "Turn on CPU insn counter.", "no"],
+	    "trace-core!" => ["trace-core", "Turn on bus access tracing.", "no"],
+	    # "trace-core-visual!" => ["trace-core-visual", "Turn on visual bus access tracing.", "no"],
+	    "enable-warnings!" => ["enable-warnings", "Enable CPU execution warnings.", "no"],
+	    "memory-region=s@" => ["memory-region=BASE,SIZE", "Add RAM region from BASE to BASE+SIZE-1.", "no",
+				   "other options:",
+				   "   bus=MAPPER     Attach memory to bus MAPPER",
+				   "   read-only      Make memory read-only",
+				   "   alias=BASE2    Add an alias at BASE2",
+				   "   file=FILENAME  Load/save memory image from file",
+				   "   mmap           Memory map given file",
+				   "   latency=R:W    Set read, write latencies  [0:0]",
+				   "   latency=RW     Set both latencies           [0]"],
+	    "gdb=i" => ["gdb=PORT", "Add a gdb/debugger interface on TCP port.", "",
+			"Equivalent to --gdbport cpu=PORT.           [none]"],
+	    "gdbport=i%" => ["gdbport PROCESSOR=PORT", "Add a gdb/debugger interface on TCP port", "",
+			     "for the given processor. May be specified",
+			     "more than once to debug multiple CPUs.      [none]"],
+	    "tksched!" => ["tksched", "Add a simple visual scheduler controller.", "no"],
+	    "tksm!" => ["tksm", "Add an experimental Tk system monitor.", "no"],
+	    "board=s" => ["board=BOARD", "Model given board or system.", "gloss"],
+	    "engine=s" => ["engine=scache|pbb", "Set given cgen CPU engine.", "pbb"],
+	    "EB!" => ["-EB | -EL", "Set powerup CPU mode to big/little endian.", "auto"],
+	    "EL!" => [],
+	    "persistent!" => ["persistent", "Rerun top-level loop indefinitely.", "no"],
+	    "no-run!" => ["no-run", "Make config file (--save-temps) and exit.", "no"],
+	    "insn-count=i" => ["insn-count=N", "Block of uninterrupted ticks for insns", "10000"],
+	    "gprof!" => ["gprof", "GPROF-profile, collect every insn-count ticks", "no"],
+	    "sidrtc=s" => [],
+	    "sidcodec=s" => [],
+	    "wrap=s@" => ["wrap=COMPONENT", "Turn on SID API tracing for named component", "none"],
+	    "load=s%" => ["load PROCESSOR=NAME", "Specify an executable to be loaded into", "",
+	                  "a specific processor. May be specified more",
+                          "than once to load multiple processors.  [cpu=exec]"],
+	    "icache=s" => ["icache=TYPE", "Add an instruction cache.", "none"],
+	    "dcache=s" => ["dcache=TYPE", "Add a data cache.", "none",
+			  "refer to any existing \"hw-cache-TYPE\" component type",
+			  "e.g., direct/64kb/32, 4way/256kb/64/lru"],
+	    "mailbox=i" => ["mailbox=PORT", "Attach a mailbox at TCP port.", "none"],
+	   );
+
+@options = keys (%options);
+
+sub usage {
+  print STDERR "\nUsage: $0 --cpu=CPU [option ..] [--] [exec args ..]\n";
+  print STDERR "Options:\n";
+  
+  foreach $usage_msgs (sort (values %options))
+    {
+      my $num_entries = scalar (@{$usage_msgs});
+      next if ($num_entries < 2);
+      
+      my $option = @{$usage_msgs}[0];
+      my $synopsis = @{$usage_msgs}[1];
+      my $default = @{$usage_msgs}[2];
+
+      # Special handling for single dash options (eg. -EL).
+      if ($option =~ /^-/)
+	{
+	  printf STDERR " %-26s ", $option;
+	} else {
+	  printf STDERR " --%-24s ", $option;
+	}
+
+      # If a default value has been given, display it within [ ].
+      if ($default ne "")
+	{
+	  my $width = 48 - length ($default);
+	  printf STDERR "%-${width}s%s\n", $synopsis, "[" . $default . "]";
+	}
+      else
+	{
+	  printf STDERR "%s\n", $synopsis;
+	}
+
+      # Print any supplementary lines of help.
+      for ($i = 3; $i < $num_entries; $i++)
+	{
+	  printf STDERR "%28s%s\n", " ", @{$usage_msgs}[$i];
+	}
+    }
+  exit (0);
+}
+
+sub configure_gloss
+  {
+    my $board = $_[0];
+    $memspecs = $gloss_memspecs{$opt_cpu};
+    @regions = split (/:/, $memspecs);
+    foreach $region (@regions)
+      {
+	push @opt_memory_region, $region;
+      }
+
+    $gloss_component_type = $gloss_comptype{$opt_cpu} || die "Unknown cpu $opt_cpu for gloss component type\n";
+    $first_section .= "# gloss\n" .
+      &sidconf_new("$gloss_component_type", "gloss") . "\n";
+
+    $second_section .= "# gloss
+relate gloss cpu cpu
+connect-pin init-sequence output-2 -> gloss reset
+connect-pin cpu trap <-> gloss trap
+connect-pin cpu trap-code -> gloss trap-code
+set gloss verbose? $opt_verbose
+connect-bus gloss target-memory $bus_upstream
+";
+    if ($opt_cpu eq "x86")
+      {
+	 $second_section .= "set gloss syscall-numbering-scheme cygmon\n";
+      }
+
+    if ($#exec_args >= 0) {
+      $second_section .= "# args
+set gloss command-line \"$exec @exec_args\"
+";
+    }
+
+    # pick tty of choice
+    if ($board =~ /tty/)
+      {
+        $any_tcl = 1;
+
+        $first_section .= "# gloss <-> tty\n" .
+	    &sidconf_new("hw-visual-tty", "tty") . "\n";
+	    $third_section .= "# gloss <-> tty
+relate tty \"$gloss_component_type gloss\" gloss
+";
+      }
+
+    # check if gdb option is not specified
+    if ($opt_gdb == 0)
+      {
+	# gloss-stdio only allowed if gdb not specified
+        if ($board =~ /stdio/)
+          {
+  	    $first_section .= "# gloss <-> stdio\n" .
+	      &sidconf_new("sid-io-stdio", "stdio") . "\n";
+	    $second_section .= "# gloss <-> stdio
+set host-sched 0-regular? 1
+set host-sched 0-time 150 # apprx. human perception limit
+connect-pin host-sched 0-event -> stdio poll
+connect-pin gloss debug-tx -> stdio stdout
+connect-pin gloss debug-rx <- stdio stdin
+";
+          }
+        $second_section .= "# gloss w/o gdb
+connect-pin gloss process-signal -> main stop!
+connect-pin gloss process-signal -> yield-net input
+";
+      }
+    # gloss gdb connections handled later in gdb section
+}
+
+my @ARGV_COPY = @ARGV;
+
+# handle args
+&GetOptions(@options);
+
+# handle version/help
+if ($opt_version) {
+  print STDERR "$version\n";
+  system ("$sid", "-v");
+  exit (0);
+}
+if ($opt_help || $opt_cpu eq "") {
+  &usage;
+}
+
+# handle leftover options
+$exec = $#ARGV >= 0 ? (shift @ARGV) : "";
+@exec_args = ();
+foreach $arg (@ARGV) {
+  # The double quotemeta() call is intended to allow arguments containing
+  # weird characters to go through both the cfgroot parser AND the run-time
+  # target libgloss parser.
+  push @exec_args, quotemeta(quotemeta($arg));
+}
+
+#if (!$exec && !$opt_gdb)
+#  {
+#    warn "Executable name not supplied";
+#  }
+
+# --load cpu=<name> overrides $exec
+if ($opt_load{"cpu"})
+{
+    if ($exec && $exec ne $opt_load{"cpu"})
+    {
+	warn "--load cpu=" . $opt_load{"cpu"} . " overrides $exec\n";
+    }
+    $exec = $opt_load{"cpu"};
+}
+elsif ($exec)
+  {
+      $opt_load{"cpu"} = "$exec";
+  }
+
+# --gdbport cpu=port overrides --gdb
+if ($opt_gdbport{"cpu"})
+{
+    if ($opt_gdb && $opt_gdb ne $opt_gdbport{"cpu"})
+    {
+	warn "--gdbport cpu=" . $opt_gdbport{"cpu"} . " overrides --gdb=$opt_gdb\n";
+    }
+    $opt_gdb = $opt_gdbport{"cpu"};
+}
+elsif ($opt_gdb)
+  {
+      $opt_gdbport{"cpu"} = $opt_gdb;
+  }
+
+if ($exec)
+  {
+    die "Cannot read executable `$exec'" if (! -r $exec && ! $opt_no_run);
+  }
+
+# infer --save-temps from --no-run
+if ($opt_no_run && (! $opt_save_temps))
+  {
+    $opt_save_temps = 1;
+  }
+
+# infer --persistent from --gdb=xxxx
+if ($opt_gdb)
+  {
+    $opt_persistent = 1;
+  }
+
+# complete component library list
+%component_libs=(
+		 "audio" => "audio_component_library",
+		 "cache" => "cache_component_library",
+		 "cgencpu" => "cgen_component_library",
+		 "consoles" => "console_component_library",
+		 "gdb" => "gdb_component_library",
+		 "gloss" => "gloss_component_library",
+		 "glue" => "glue_component_library",
+		 "ide" => "ide_component_library",
+		 "interrupt" => "interrupt_component_library",
+		 "hd44780u" => "hd44780u_component_library",
+		 "loader" => "loader_component_library",
+		 "mailbox" => "mbox_component_library",
+		 "mapper" => "mapper_component_library",
+		 "memory" => "mem_component_library",
+		 "mmu" => "mmu_component_library",
+		 "parport" => "parport_component_library",
+		 "prof" => "prof_component_library",
+		 "rtc" => "rtc_component_library",
+		 "sched" => "sched_component_library",
+		 "tclapi" => "tcl_bridge_library",
+		 "timers" => "timer_component_library",
+		 "uart" => "uart_component_library",
+		 "x86" => "x86_component_library"
+);
+
+
+# ----------------------------------------------------------------------------
+# Configuration file construction
+
+# Don't bother compute accurate values if config file is temporary
+# anyway.
+if ($opt_norun || $opt_save_temps) {
+  $whoami=qx{whoami}; chop ($whoami);
+  $hostname=qx{hostname}; chop ($hostname);
+  $date=qx{date}; chop ($date);
+  $uname=qx{uname}; chop ($uname);
+} else {
+  $whoami="";
+  $hostname="";
+  $date="";
+  $uname="";
+}
+$zeroth_section = "# sid configuration file
+# created by $version
+# run by $whoami @ $hostname ($uname) at $date
+# args: @ARGV_COPY\n";
+
+if ($opt_verbose) { $zeroth_section .= "set main verbose? true\n"; }
+
+$cpu_component_type = $cpu_comptype{$opt_cpu} || die "Unknown cpu $opt_cpu for cpu component type\n";
+$first_section = "# first section\n" .
+  &sidconf_new("$cpu_component_type", "cpu") . "\n" .
+  &sidconf_new("hw-mapper-basic", "cpu-mapper") . "\n" .
+  &sidconf_new("hw-glue-sequence-8", "init-sequence") . "\n" .
+  &sidconf_new("hw-glue-sequence-1", "hw-reset-net") . "\n" .
+  &sidconf_new("hw-glue-sequence-8", "deinit-sequence") . "\n" .
+  &sidconf_new("hw-glue-sequence-1", "yield-net") . "\n" .
+  &sidconf_new("hw-glue-sequence-2", "cache-flush-net") . "\n" .
+  &sidconf_new("sid-sched-host-accurate", "host-sched") . "\n" .
+  &sidconf_new("sid-sched-sim", "target-sched") . "\n" .
+  "";
+
+if ($opt_cpu eq "mt")
+  {
+      $first_section .= "# add io bus probe\n" .
+      &sidconf_new("hw-glue-probe-bus", "io-bus-probe") . "\n";
+  }
+
+if ($opt_trace_core || $opt_trace_core_visual)
+  {
+    $first_section .= "# core tracing\n" .
+      &sidconf_new("hw-glue-probe-bus", "bus-probe") . "\n";
+    $bus_upstream = "bus-probe upstream";
+  }
+else
+  {
+    $bus_upstream = "cpu-mapper access-port";
+  }
+
+if ($opt_insn_count)
+  {
+    $cpu_insn_count = $opt_insn_count;
+  }
+else
+  {
+    $cpu_insn_count = 10000;
+  }
+
+if ($opt_gprof)
+  {
+    $first_section .= "# gprof\n" .
+      &sidconf_new("sw-profile-gprof", "gprof") . "\n";
+  }
+
+$enable_z_packet = "false";
+$second_section = "# second section
+# settings
+set cpu step-insn-count $cpu_insn_count\n" .
+($opt_trace_semantics ? "set cpu trace-semantics? $opt_trace_semantics\n" : "") .
+($opt_trace_disassemble ? "set cpu trace-disassemble? $opt_trace_disassemble\n" : "") .
+($opt_trace_counter ? "set cpu trace-counter? $opt_trace_counter\n" : "") .
+($opt_trace_extract ? "set cpu trace-extract? $opt_trace_extract\n" : "") .
+($opt_enable_warnings ? "set cpu enable-warnings? $opt_enable_warnings\n" : "") .
+"set host-sched num-clients 10 # large enough?
+set target-sched num-clients 10 # large enough?
+# pin connections
+connect-pin main perform-activity -> host-sched advance
+connect-pin main perform-activity -> target-sched advance
+connect-pin main starting -> init-sequence input
+connect-pin main stopping -> deinit-sequence input
+connect-pin init-sequence output-0 -> hw-reset-net input
+connect-pin hw-reset-net output-0 -> cpu reset!
+set target-sched 0-name \"CPU stepping\"
+connect-pin target-sched 0-event -> cpu step!
+connect-pin target-sched 0-control <- cpu step-cycles
+connect-pin target-sched time-query <- cpu time-query
+connect-pin target-sched time-high -> cpu time-high
+connect-pin target-sched time-low -> cpu time-low
+connect-pin yield-net output-0 -> cpu yield
+connect-pin yield-net output-0 -> host-sched yield
+";
+
+if ($opt_icache) {
+  $first_section .= &sidconf_new("hw-cache-$opt_icache", "icache") . "\n";
+  $second_section .= "connect-bus cpu insn-memory icache upstream
+connect-bus icache downstream $bus_upstream
+set icache report-heading \"icache profile report\"
+connect-pin init-sequence output-1 -> icache invalidate-all
+connect-pin deinit-sequence output-6 -> icache report!
+connect-pin cache-flush-net output-0 -> icache flush-all
+connect-pin cache-flush-net output-1 -> icache invalidate-all\n";
+  # $bus_upstream = "icache upstream";
+} else {
+  $second_section .= "connect-bus cpu insn-memory $bus_upstream\n";
+}
+
+if ($opt_dcache) {
+  $first_section .= &sidconf_new("hw-cache-$opt_dcache", "dcache") . "\n";
+  $second_section .= "connect-bus cpu data-memory dcache upstream
+connect-bus dcache downstream $bus_upstream
+set dcache report-heading \"dcache profile report\"
+connect-pin init-sequence output-1 -> dcache invalidate-all
+connect-pin deinit-sequence output-6 -> dcache report!
+connect-pin cache-flush-net output-0 -> dcache flush-all
+connect-pin cache-flush-net output-1 -> dcache invalidate-all\n";
+  $bus_upstream = "dcache upstream";
+} else {
+  $second_section .= "connect-bus cpu data-memory $bus_upstream\n";
+}
+
+if ($opt_cpu eq "x86")
+  {
+      $second_section .= "set cpu memory-mode cygmon\n";
+  }
+
+if ($opt_cpu eq "mt")
+  {
+      # Uncomment the next three lines to enable io bus tracing.
+      #$second_section .= "# Connect bus tracer to io bus accessor\n" .
+      #"connect-bus cpu io-memory io-bus-probe upstream\n" .
+      #"set io-bus-probe trace? 1\n";
+  }
+
+if ($opt_gprof)
+  {
+    $second_section .= "# gprof connections
+connect-pin deinit-sequence output-7 -> gprof store
+connect-pin cpu sample-gprof -> gprof sample
+connect-pin cpu gprof-pc -> gprof pc
+connect-pin cpu gprof-pc-hi -> gprof pc-hi
+connect-pin cpu cg-caller -> gprof cg-caller
+connect-pin cpu cg-callee -> gprof cg-callee
+relate gprof target-component cpu
+";
+    if ($opt_cpu eq "mep") {
+      $second_section .= "set gprof bucket-size 2\n";
+    }
+    else {
+      $second_section .= "set gprof bucket-size 4\n";
+    }
+  }
+
+if ($opt_trace_core || $opt_trace_core_visual)
+  {
+    $second_section .= "# core tracing
+connect-bus bus-probe downstream cpu-mapper access-port
+";
+  }
+
+if ($opt_trace_core)
+  {
+    $second_section .= "set bus-probe trace? 1\n";
+  }
+
+$third_section = "";
+
+
+# ----------------------------------------------------------------------------
+# Board-dependent logic
+
+
+if ($opt_board =~ /pid7t/)
+  {
+    # XXX: incorrect!
+    # XXX: what about SRAM, SSRAM memory regions???
+
+    if ($opt_board =~ /cygmon/)
+      {
+	die "board pid7t-cygmon only supported in little-endian mode (-EL)\n" unless ($opt_EL);
+	unshift @opt_memory_region, ( "0x04000000,0x00100000,file=armpid-cygmon.img,read-only" );
+      }
+    elsif ($opt_board =~ /eCosstub/)
+      {
+	die "board pid7t-eCos only supported in little-endian mode (-EL)\n" unless ($opt_EL);
+	unshift @opt_memory_region, ( "0x04000000,0x00100000,file=armpid-eCos.img,read-only" );
+      }
+    if ($opt_board =~ /redboot/)
+      {
+	die "board pid7t-redboot only supported in little-endian mode (-EL)\n" unless ($opt_EL);
+	unshift @opt_memory_region, ( "0x04000000,0x00100000,file=armpid-redboot.img,read-only" );
+      }
+    else
+      {
+	unshift @opt_memory_region, ( "0x04000000,0x00100000" ); # default 1MB ROM - writeable
+      }
+
+    unshift @opt_memory_region, ( "0x00000000,0x01000000" ); # default 16MB RAM
+
+    $first_section .= "# pid7t components\n" .
+      &sidconf_new("hw-remap/pause-arm/ref", "remapper") . "\n" .
+      &sidconf_new("hw-timer-arm/ref-sched", "timer1") . "\n" .
+      &sidconf_new("hw-timer-arm/ref-sched", "timer2") . "\n" .
+      &sidconf_new("hw-interrupt-arm/ref", "intctrl") . "\n" .
+      &sidconf_new("hw-uart-ns16550", "uart1") . "\n" .
+      &sidconf_new("hw-uart-ns16550", "uart2") . "\n" .
+      &sidconf_new("hw-parport-ps/2", "parport") . "\n" .
+      "";
+
+    $second_section .= "# pid7t control connections
+connect-pin target-sched 2-control <- timer1 divided-clock-control
+connect-pin target-sched 2-event -> timer1 divided-clock-event
+set target-sched 2-scale 1/4  # artificial speed-up
+connect-pin timer1 interrupt -> intctrl interrupt-source-4
+connect-pin target-sched 3-control <- timer2 divided-clock-control
+connect-pin target-sched 3-event -> timer2 divided-clock-event
+set target-sched 3-scale 1/4  # artificial speed-up
+connect-pin timer2 interrupt -> intctrl interrupt-source-5
+connect-pin intctrl interrupt -> cpu nirq
+connect-pin intctrl fast-interrupt -> cpu nfiq
+connect-pin hw-reset-net output-0 -> uart1 Reset
+connect-pin hw-reset-net output-0 -> uart2 Reset
+connect-pin hw-reset-net output-0 -> intctrl reset
+connect-pin hw-reset-net output-0 -> timer1 reset
+connect-pin hw-reset-net output-0 -> timer2 reset
+connect-pin uart1 INTR -> intctrl interrupt-source-8
+connect-pin uart2 INTR -> intctrl interrupt-source-9
+connect-pin parport INTP -> intctrl interrupt-source-10
+# pid7t memory map
+connect-bus cpu-mapper intctrl:[0xA000000,0xA000013] intctrl irq-registers
+connect-bus cpu-mapper intctrl:[0xA000100,0xA00010F] intctrl fiq-registers
+connect-bus cpu-mapper timer1:[0xA800000,0xA80000F] timer1 registers
+connect-bus cpu-mapper timer2:[0xA800020,0xA80002F] timer2 registers
+connect-bus cpu-mapper remapper:[0xB000000,0xB000037] remapper registers
+connect-bus cpu-mapper uart1:[0xD800000,0xD80001F,4,1] uart1 Bus
+connect-bus cpu-mapper uart2:[0xD800020,0xD80003F,4,1] uart2 Bus
+connect-bus cpu-mapper parport:[0xD800040,0xD80005F,4,1] parport Bus
+# set uart unframed mode
+set uart1 sio-framing? 0
+set uart2 sio-framing? 0
+# remapper configuration
+# NB: remapping polarity is opposite to document
+set remapper num-relocations 1
+set remapper 0-start 0x0
+set remapper 0-end 0xFFFF
+set remapper 0-reloc-to 0x04000000
+";
+
+    # reconnect bus masters to pass through remapper
+    $third_section .= "# remapper reconnection
+connect-bus remapper all $bus_upstream
+disconnect-bus cpu insn-memory $bus_upstream
+connect-bus cpu insn-memory remapper access-port
+disconnect-bus cpu data-memory $bus_upstream
+connect-bus cpu data-memory remapper access-port
+";
+
+    # create uart <-> real world connections
+    if ($opt_board =~ /normalmap/)
+      {
+    $third_section .= "# disable remapper
+set remapper remapping? no
+";
+      }
+
+      # pull in this configuration.
+       configure_uart1_uart2();
+  }
+elsif ($opt_board =~ /^cma110/)
+  {
+    # missing:
+    # PS/2 kbd/ms, PCI, flash, gloss
+
+    unshift @opt_memory_region, ( "0x00000000,0x00800000" ); # default 8MB RAM
+    if ($opt_board =~ /:cma222/)
+      {
+
+        $first_section .= "# cma110/cma222 specific parts\n" .
+	  &sidconf_new("hw-timer-arm/ref-sched", "timer") . "\n" .
+	  &sidconf_new("hw-interrupt-cogent/cma222", "intctrl") . "\n" .
+	  "";
+
+        $second_section .= "# cma222 control connections
+connect-pin target-sched 2-control <- timer divided-clock-control
+connect-pin target-sched 2-event -> timer divided-clock-event
+connect-pin timer interrupt -> intctrl interrupt-source-4
+connect-pin intctrl interrupt -> cpu nirq
+# connect the on-cpu board devices
+connect-bus cpu-mapper intctrl:[0xF600000,0xF600037] intctrl irq-registers
+connect-bus cpu-mapper timer:[0xF700020,0xF70003F] timer registers
+";
+      }
+    else
+      {
+        die "Unknown board `$opt_board'\n";
+      }
+
+    $first_section .= "# cma110 common parts\n" .
+      &sidconf_new("hw-uart-ns16550", "uart1") . "\n" .
+      &sidconf_new("hw-uart-ns16550", "uart2") . "\n" .
+      &sidconf_new("hw-parport-ps/2", "parport") . "\n" .
+      &sidconf_new("hw-rtc-ds1642", "rtc") . "\n" .
+      &sidconf_new("hw-lcd-hd44780u-a02", "lcd") . "\n" .
+      &sidconf_new("hw-visual-lcd", "display") . "\n" .
+      "";
+
+    $second_section .= "# cma110 control connections
+connect-pin hw-reset-net output-0 -> uart1 Reset
+connect-pin hw-reset-net output-0 -> uart2 Reset
+connect-pin hw-reset-net output-0 -> timer reset
+connect-pin uart1 INTR -> intctrl interrupt-source-2
+connect-pin uart2 INTR -> intctrl interrupt-source-1
+connect-pin parport INTP -> intctrl interrupt-source-4
+# configure the clock
+set host-sched num-clients 10
+set host-sched 0-regular? 1
+set host-sched 0-time 1000 # 1 sec
+connect-pin host-sched 0-event -> rtc clock
+connect-pin rtc clock-control -> host-sched 1-control
+connect-pin rtc clock-event <- host-sched 1-event
+# configure the lcd
+#set display width 40 # 8 chars X 5 pixels per char
+# note that hw-lcd-hd44780u may not support width of 80; this board
+# has one though.
+set display width 80 # 16 chars X 5 pixels per char
+set display height 16 # two lines of 8 pixels
+connect-pin host-sched 9-event -> lcd refresh-sync-event
+connect-pin host-sched 9-control <- lcd refresh-sync-control
+connect-pin lcd row-col -> display row-col
+connect-pin lcd FR -> display FR
+# memory map
+# 8MB main memory
+#connect-bus PCI pcibus:[0x4000000,0x5FEFFFF] pcibus config-space
+#connect-bus ??? ??????:[0x5FF0000,0x5FFFFFF] v360epc registers
+# ARM EPROM/FLASH memory
+connect-bus cpu-mapper rtc:[0xE800000,0xE803FFF] rtc read-write-port
+connect-bus cpu-mapper uart1:[0xE900000,0xE90001F,4,1] uart1 Bus
+connect-bus cpu-mapper uart2:[0xE900020,0xE90003F,4,1] uart2 Bus
+connect-bus cpu-mapper parport:[0xE900080,0xE90009F,4,1] parport Bus
+# kbd/ms
+connect-bus cpu-mapper lcd:[0xE900100,0xE90010F,4,1] lcd bus
+# DIP switches
+#connect-bus PCI pcibus:[0xF200000,0xF2FFFFF] pcibus control-registers
+# set uart unframed mode
+set uart1 sio-framing? 0
+set uart2 sio-framing? 0
+";
+
+    # pull in this configuration.
+    configure_uart1_uart2();
+
+  }
+elsif ($opt_board =~ /chiphw/)
+  {
+    $first_section .= "# ubicom32 timers\n" .
+	&sidconf_new("hw-timer-ubicom32/ref-generic", "ubicom32timer") . "\n";
+
+    $second_section .= "# ubicom32 specific .
+connect-pin target-sched 2-event -> ubicom32timer clockMptVal
+connect-pin target-sched 3-event -> ubicom32timer clockSysVal
+set target-sched 2-regular? 1 
+set target-sched 2-time 1 
+set target-sched 3-regular? 1 
+set target-sched 3-time 1 
+connect-pin hw-reset-net output-0 -> ubicom32timer reset
+connect-pin ubicom32timer int_set_0 -> cpu irq_0
+connect-pin ubicom32timer int_set_1 -> cpu irq_1
+connect-pin ubicom32timer int_set_2 -> cpu irq_2
+connect-pin ubicom32timer int_set_3 -> cpu irq_3
+connect-pin ubicom32timer int_set_4 -> cpu irq_4
+connect-pin ubicom32timer int_set_5 -> cpu irq_5
+connect-pin ubicom32timer int_set_6 -> cpu irq_6
+connect-pin ubicom32timer int_set_7 -> cpu irq_7
+connect-pin ubicom32timer wd_rst_out -> hw-reset-net input
+connect-pin ubicom32timer int_set_rttmr -> cpu rttmr-interrupt
+";
+
+    if($opt_cpu eq "ubicom32")
+{
+    $third_section .= "# ubicom32 memory\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "flashmem") . "\n" .
+          "set flashmem size 0x400000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "progmem") . "\n" .
+          "set progmem size 0x80000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "datamem") . "\n" .
+          "set datamem size 0x10000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "copromem") . "\n" .
+          "set copromem size 0x100000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "hrttable1") . "\n" .
+          "set hrttable1 size 0x100\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "hrttable2") . "\n" .
+          "set hrttable2 size 0x100\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "iospace") . "\n" .
+          "set iospace size 0x1000\n" ;
+    $third_section .= "# ubicom32 memory mapping .
+connect-bus data-mapper flashmem:[0x20000000,0x203fffff] flashmem read-write-port
+connect-bus data-mapper progmem:[0x40000000,0x4007ffff] progmem read-write-port
+connect-bus data-mapper datamem:[0x100000,0x10ffff] datamem read-write-port
+connect-bus data-mapper iospace:[0x1000,0x1fff] iospace read-write-port
+connect-bus data-mapper ubicom32timer:[0xa00,0xaff] ubicom32timer Timer-bus
+connect-bus data-mapper hrttable1:[0x800,0x8ff] hrttable1 read-write-port
+connect-bus data-mapper hrttable2:[0x900,0x9ff] hrttable2 read-write-port
+#connect-bus data-mapper tracetable:[0x4000,0x4fff] tracetable read-write-port
+#connect-bus data-mapper sramdata:[0x100000,0x10ffff] sramdata read-write-port
+#connect-bus data-mapper extdata:[0x500000,0xffffff] extdata read-write-port
+";
+} elsif (($opt_cpu eq "ubicom32mars") || ($opt_cpu eq "ubicom32jupiter") || ($opt_cpu eq "ubicom32ares")) {
+    $third_section .= "# ubicom32mars/ares/jupiter memory\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "flashmem") . "\n" .
+          "set flashmem size 0x1000000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "onchipmem") . "\n" .
+          "set onchipmem size 0x30000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "offchipmem") . "\n" .
+          "set offchipmem size 0x1000000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "hrttable1") . "\n" .
+          "set hrttable1 size 0x100\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "hrttable2") . "\n" .
+          "set hrttable2 size 0x100\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "iospace") . "\n" .
+          "set iospace size 0x10000\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "onchipperipheral") . "\n" .
+	      "set onchipperipheral size 0x1000\n" ;
+
+    $third_section .= "# ubicom32mars/ares/jupiter memory mapping .
+connect-bus data-mapper flashmem:[0x60000000,0x60ffffff] flashmem read-write-port
+connect-bus data-mapper onchipmem:[0x3ffc0000,0x3fffffff] onchipmem read-write-port
+connect-bus data-mapper offchipmem:[0x40000000,0x47ffffff] offchipmem read-write-port
+connect-bus data-mapper iospace:[0x02000000,0x0200ffff] iospace read-write-port
+connect-bus data-mapper onchipperipheral:[0x01000000,0x01000fff] onchipperipheral read-write-port
+#connect-bus data-mapper ubicom32timer:[0xa00,0xaff] ubicom32timer Timer-bus
+connect-bus data-mapper hrttable1:[0x800,0x8ff] hrttable1 read-write-port
+connect-bus data-mapper hrttable2:[0x900,0x9ff] hrttable2 read-write-port
+";
+}
+    if ($opt_board =~ /gloss/)
+      {
+	configure_gloss("gloss-stdio");
+	$third_section .= "# ubicom32 syscall enablement .
+set cpu syscall-trap 57
+";
+      }
+  }
+elsif ($opt_cpu eq "mep" && ($opt_board ne "gloss-stdio"))
+  {
+    # Fallback defaults for incomplete configurations
+    $mepcfg_index = -1; # flag to detect match
+    $mepcfg_core_id = 0;
+    $mepcfg_core_rev = 1;
+    $mepcfg_imem_size = 0;
+    $mepcfg_dmem_size = 0;
+    $mepcfg_icache_size = 0;
+    $mepcfg_icache_way = 1;
+    $mepcfg_icache_line_size = 32;
+    $mepcfg_dcache_size = 0;
+    $mepcfg_dcache_way = 1;
+    $mepcfg_dcache_line_size = 32;
+    $mepcfg_dsu = 0;
+    $mepcfg_intc_channel_bitw = 32;
+    $mepcfg_intc = 0;
+    $mepcfg_dmac = 0;
+    $mepcfg_cop_vliw_bitw = 0;
+    $mepcfg_opt_abs = 0;
+    $mepcfg_opt_ave = 0;
+    $mepcfg_opt_bit = 0;
+    $mepcfg_opt_clip = 0;
+    $mepcfg_opt_cp = 0;
+    $mepcfg_opt_div = 0;
+    $mepcfg_opt_ldz = 0;
+    $mepcfg_opt_min = 0;
+    $mepcfg_opt_mul = 0;
+    $mepcfg_opt_sat = 0;
+    $mepcfg_dsp = 0;
+    $mepcfg_uci = 0;
+    @mep_boards = ();
+
+    $mepcfg_index = 1;
+    $mepcfg_imem_size = 16;
+    $mepcfg_dmem_size = 32;
+    $mepcfg_icache_size = 16;
+    $mepcfg_icache_way = 1;
+    $mepcfg_icache_line_size = 32;
+    $mepcfg_dcache_size = 16;
+    $mepcfg_dcache_way = 1;
+    $mepcfg_dcache_line_size = 32;
+    $mepcfg_intc_channel_bitw = 16;
+    $mepcfg_opt_cp = 1;
+    $mepcfg_cop_vliw_bitw = 64;
+    $mepcfg_opt_abs = 1;
+    $mepcfg_opt_ave = 1;
+    $mepcfg_opt_bit = 1;
+    $mepcfg_opt_clp = 1;
+    $mepcfg_opt_div = 1;
+    $mepcfg_opt_ldz = 1;
+    $mepcfg_opt_min = 1;
+    $mepcfg_opt_mul = 1;
+    $mepcfg_opt_sat = 1;
+    $mepcfg_endian = "big";
+    $mepcfg_intc = 1;
+    $mepcfg_dsu = 1;
+    $mepcfg_dmac = 1;
+    $mepcfg_dsp = 1;
+    $mepcfg_uci = 1;
+
+    # Eww, ugly hack to change "hw-cpu-mep" in $first_section to
+    # "hw-cpu-mep-extNNN" for NNN=$mepcfg_index
+    $first_section =~ s|new hw-cpu-mep|new hw-cpu-mep-ext$mepcfg_index|;
+
+    # cpu attributes
+    if ($mepcfg_endian eq "big") { $opt_EB = 1; }
+    elsif ($mepcfg_endian eq "little") { $opt_EL = 1; }
+
+    $csr17 = (($mepcfg_core_id << 16) | (1 << 8) | $mepcfg_core_rev);
+    $second_section .= "set cpu csr17 $csr17\n";
+
+    $second_section .= "set cpu abs-option? " . ($mepcfg_opt_abs) . "\n";
+    $second_section .= "set cpu ave-option? " . ($mepcfg_opt_ave) . "\n";
+    $second_section .= "set cpu bit-option? " . ($mepcfg_opt_bit) . "\n";
+    $second_section .= "set cpu clip-option? " . ($mepcfg_opt_clip) . "\n";
+    $second_section .= "set cpu cp-option? " .  ($mepcfg_opt_cp) . "\n";
+    $second_section .= "set cpu div-option? " . ($mepcfg_opt_div) . "\n";
+    $second_section .= "set cpu ldz-option? " . ($mepcfg_opt_ldz) . "\n";
+    $second_section .= "set cpu minmax-option? " . ($mepcfg_opt_min) . "\n";
+    $second_section .= "set cpu mul-option? " . ($mepcfg_opt_mul) . "\n";
+    $second_section .= "set cpu sat-option? " . ($mepcfg_opt_sat) . "\n";
+
+    $second_section .= "set cpu debug-option? " . ($mepcfg_dsu) . "\n";
+    $second_section .= "set cpu dsp-option? " . ($mepcfg_dsp) . "\n";
+    $second_section .= "set cpu uci-option? " . ($mepcfg_uci) . "\n";
+
+    $second_section .= "set cpu vliw32-option? " . ($mepcfg_cop_vliw_bits == 32 ? 1 : 0) . "\n";
+    $second_section .= "set cpu vliw64-option? " . ($mepcfg_cop_vliw_bits == 64 ? 1 : 0) . "\n";
+
+    # dmem/imem calculations; see mep RCFG definition and memory layout chapter
+    $mep_imem_base = ($mepcfg_imem_size == 0 ? 0 : 0x00200000);
+    $mep_imem_size = 1024 * $mepcfg_imem_size;
+    $mep_dmem_base = (($mepcfg_dmem_size == 0) ? 0 :
+		      ($mepcfg_imem_size == 0) ? 0x00200000 :
+		      ($mepcfg_dmem_size > 16) ? 0x00208000 :
+		      ($mepcfg_imem_size >= 12) ? 0x00204000 :
+		      ($mepcfg_dmem_size <= 8) ? 0x00202000 :
+		      ($mepcfg_dmem_size <= 16) ? 0x00204000 :
+		      0xdeadbeef); # can't happen
+
+    $mep_dmem_bank0_base = $mep_dmem_base;
+    $mep_dmem_bank1_base = $mep_dmem_base + 1024 * ($mepcfg_dmem_size == 6 ? 4 :
+						    $mepcfg_dmem_size == 12 ? 8 :
+						    $mepcfg_dmem_size == 24 ? 16 :
+						    $mepcfg_dmem_size / 2);
+    $mep_dmem_bank0_size = 1024 * $mepcfg_dmem_size / 2;
+    $mep_dmem_bank1_size = 1024 * $mepcfg_dmem_size / 2;
+
+    # These are complex bitfields:
+    # LCFG: local memory configuration
+    $csr27 = (0x01000100 | # fixed bits
+	      ($mepcfg_imem_size << 16) | # IRSZ
+	      ($mepcfg_dmem_size << 0) | # DRSZ
+	      (($mep_dmem_base >> 12) & 0xf)); # DRBA
+    $second_section .= "set cpu csr27 $csr27\n";
+
+    # CCFG: cache memory configuration
+    $csr28 = (0x00000000 | # no fixed bits
+	      ($mepcfg_icache_size << 16) | # ICSZ
+	      ($mepcfg_dcache_size << 0)); # DCSZ
+    $second_section .= "set cpu csr28 $csr28\n";
+
+    # control bus layout
+    $zeroth_section .= "load libmepfamily.la mepfamily_component_library\n";
+    $first_section .= "# control space
+new hw-mapper-basic cpu-control-space
+set cpu-control-space latency 1
+new hw-mapper-basic cpu-local-space
+" .
+  ($mepcfg_dsu ? "new hw-debug-mep cpu-dsu\n" : "") .
+  ($mepcfg_dmac ? "new hw-dma-mep cpu-dmac\n" : "") .
+  ($mepcfg_intc ? "new hw-interrupt-mep-${mepcfg_intc_channel_bitw} cpu-intc\n" : "");
+
+    $second_section .= "# configuration / connection of control space peripherals
+connect-bus cpu control-space cpu-control-space access-port
+" .
+  ($mepcfg_dsu ? "connect-bus cpu-control-space dsu[4*0x800-0x802] cpu-dsu status-regs
+connect-bus cpu-control-space dsu[4*0x900-0x902] cpu-dsu insn-regs
+connect-bus cpu-control-space dsu[4*0xA00-0xA05] cpu-dsu data-regs\n" : "") .
+  ($mepcfg_dmac ? "connect-bus cpu-control-space dmac[4*0x1000-0x1009] cpu-dmac control-regs-low
+connect-bus cpu-control-space dmac[4*0x1FFF-0x1FFF] cpu-dmac control-regs-high\n" : "") .
+  ($mepcfg_intc ? "connect-bus cpu-control-space intc[4*0x0-0x7] cpu-intc registers\n" : "");
+
+    $third_section .=
+      ($mepcfg_dmac ? "# mep dmac connection
+connect-bus cpu-dmac local-memory cpu-local-space access-port
+connect-bus cpu-dmac main-memory cpu-mapper access-port
+set target-sched 2-name \"DMA controller burst events\"
+connect-pin target-sched 2-event -> cpu-dmac burst-event
+connect-pin target-sched 2-control <- cpu-dmac burst-control
+" : "") .
+  ($mepcfg_intc ? "# mep intc connection
+connect-pin cpu-intc interrupt -> cpu interrupt
+" : "");
+
+    # mep instruction fetch buffer: 8 bytes
+    $first_section .= "# instruction fetch buffer
+new hw-cache-buffer-8 cpu-insn-buffer
+set cpu-insn-buffer write-through? true
+connect-pin cache-flush-net output-0 -> cpu-insn-buffer flush-all
+connect-pin init-sequence output-1 -> cpu-insn-buffer invalidate-all
+";
+
+    # "default" memory layout
+    push @opt_memory_region, "0x00000000,0x200,latency=5";    # vec
+    push @opt_memory_region, "0x00010000,0x60000,latency=5";  # romdata.m
+    push @opt_memory_region, "0x00080000,0x80000,latency=5";  # code.m
+    push @opt_memory_region, "0x00100000,0x80000,latency=5";  # data.m
+    # push @opt_memory_region, "0x00300000,0x10000";  # icache data testing area
+    # push @opt_memory_region, "0x00310000,0x10000";  # icache tag testing area
+    # push @opt_memory_region, "0x00320000,0x10000";  # dcache data testing area
+    # push @opt_memory_region, "0x00330000,0x10000";  # dcache tag testing area
+    push @opt_memory_region, "0x01000000,0x8000,latency=5";   # romdata.s
+    push @opt_memory_region, "0x01008000,0x8000,latency=5";   # data.s
+    push @opt_memory_region, "0x02000000,0x100000,latency=5"; # data.l
+    push @opt_memory_region, "0x02200000,0x100000,latency=5"; # romdata.l
+    push @opt_memory_region, "0x02300000,0x100000,latency=5"; # code.l
+    push @opt_memory_region, "0x03000000,0x100000,latency=5"; # stack
+    push @opt_memory_region, "0x04000000,0x100000,latency=5"; # heap
+
+    $third_section .= "connect-bus cpu-mapper local:[0x00200000,0x00210000] cpu-local-space access-port\n";
+
+    push @opt_memory_region, ($mep_imem_base - 0x00200000) . "," . $mep_imem_size . ",bus=cpu-local-space,latency=2" if $mep_imem_size;
+    push @opt_memory_region, ($mep_dmem_bank0_base - 0x00200000) . "," . $mep_dmem_bank0_size . ",bus=cpu-local-space,latency=2" if $mep_dmem_bank0_size;
+    push @opt_memory_region, ($mep_dmem_bank1_base - 0x00200000) . "," . $mep_dmem_bank1_size . ",bus=cpu-local-space,latency=2" if $mep_dmem_bank1_size;
+
+    if ($mepcfg_icache_size)
+      {
+	$cachetype =
+	  ($mepcfg_icache_way == 1 ? "direct" : ($mepcfg_icache_way . "way")) . "/" .
+	    $mepcfg_icache_size . "kb" . "/" .
+	      $mepcfg_icache_line_size .
+		($mepcfg_icache_way == 1 ? "" : "/random");
+
+	configure_mep_cached_bus("insn", $cachetype, $mepcfg_dsu);
+	$third_section .= "# icache tag test area
+new hw-glue-probe-bus cpu-insn-cache-tagtest
+new hw-memory-ram/rom-basic cpu-insn-cache-tag
+set cpu-insn-cache-tag size 0x10000
+connect-bus cpu-mapper [0x00310000-0x0031FFFF] cpu-insn-cache-tagtest upstream
+connect-bus cpu-insn-cache-tagtest downstream cpu-insn-cache-tag read-write-port
+connect-pin cpu-insn-cache-tagtest address -> cpu-insn-cache invalidate-all
+";
+      }
+    else
+      {
+	$second_section .= "
+disconnect-bus cpu insn-memory cpu-mapper access-port
+connect-bus cpu insn-memory cpu-insn-buffer upstream
+connect-bus cpu-insn-buffer downstream cpu-mapper access-port
+connect-pin init-sequence output-0 -> cpu-insn-buffer invalidate-all\n";
+      }
+    if ($mepcfg_dcache_size)
+      {
+	$cachetype =
+	  ($mepcfg_dcache_way == 1 ? "direct" : ($mepcfg_dcache_way . "way")) . "/" .
+	    $mepcfg_dcache_size . "kb" . "/" .
+	      $mepcfg_dcache_line_size .
+		($mepcfg_dcache_way == 1 ? "" : "/random");
+	configure_mep_cached_bus("data", $cachetype, $mepcfg_dsu);
+	$bus_upstream = "cpu-data-cachefilter access-port";
+	$third_section .= "# dcache tag test area
+new hw-glue-probe-bus cpu-data-cache-tagtest
+new hw-memory-ram/rom-basic cpu-data-cache-tag
+set cpu-data-cache-tag size 0x10000
+connect-bus cpu-mapper [0x00330000-0x0033FFFF] cpu-data-cache-tagtest upstream
+connect-bus cpu-data-cache-tagtest downstream cpu-data-cache-tag read-write-port
+connect-pin cpu-data-cache-tagtest address -> cpu-data-cache invalidate-all
+";
+      }
+    else
+      {
+	$bus_upstream = "cpu-mapper access-port";
+      }
+
+    if ($opt_board =~ /gloss/)
+      {
+	# prevent configure_gloss from adding in the overlapping defaults
+	$gloss_memspecs{$opt_cpu}="";
+	configure_gloss ($opt_board);
+      }
+  }
+elsif ($opt_board =~ /gloss/)
+  {
+    configure_gloss($opt_board);
+  }
+else
+  {
+    die "Unknown board `$opt_board'\n";
+  }
+
+
+
+# ------------------------------------------------------------------------
+# Handle endianness
+
+if ($opt_EB && $opt_EL) { die "Both -EB and -EL specified\n"; }
+if (!$opt_EB && !$opt_EL && $opt_gdb != 0)
+  {
+    if ($cpu_defaultendian{$opt_cpu} eq "-EB") { $opt_EB = 1; }
+    elsif ($cpu_defaultendian{$opt_cpu} eq "-EL") { $opt_EL = 1; }
+    else { warn "Should specify endianness"; &usage; }
+  }
+elsif (!$opt_EB && !$opt_EL && !$exec)
+  {
+    warn "Should specify executable"; &usage;
+  }
+if ($opt_EB) { $third_section .= "set cpu endian big\n"; }
+if ($opt_EL) { $third_section .= "set cpu endian little\n"; }
+
+
+# ----------------------------------------------------------------------------
+# Misc. logic
+
+# this is used by both the arm710t and cogent cma110 boards.
+sub configure_uart1_uart2
+  {
+    # create uart <-> real world connections
+    if ($opt_board =~ /uart1:stdio/)
+      {
+	$first_section .= "# stdio1\n" .
+	  &sidconf_new("sid-io-stdio", "stdio1") . "\n";
+	$second_section .= "# stdio1 polling
+set host-sched 0-regular? 1
+set host-sched 0-time 50
+connect-pin host-sched 0-event -> stdio1 poll
+";
+	$third_section .= "# stdio1 connection
+connect-pin uart1 Sout -> stdio1 stdout
+connect-pin uart1 Sin <- stdio1 stdin
+";
+      }
+
+    if ($opt_board =~ /uart2:stdio/)
+      {
+	$first_section .= "# stdio2\n" .
+	  &sidconf_new("sid-io-stdio", "stdio2") . "\n";
+	$second_section .= "# stdio2 polling
+set host-sched 0-regular? 1
+set host-sched 0-time 50
+connect-pin host-sched 0-event -> stdio2 poll
+";
+	$third_section .= "# stdio2 connection
+connect-pin uart2 Sout -> stdio2 stdout
+connect-pin uart2 Sin <- stdio2 stdout
+";
+      }
+
+    if ($opt_board =~ /uart1:tty/)
+      {
+	$any_tcl = 1;
+
+	$first_section .= "# tty1\n" .
+	  &sidconf_new("hw-visual-tty", "tty1") . "\n";
+	$third_section .= "# tty1 auto-connection
+relate tty1 \"hw-uart-ns16550 uart1\" uart1
+";
+      }
+
+    if ($opt_board =~ /uart2:tty/)
+      {
+	$any_tcl = 1;
+
+	$first_section .= "# tty2\n" .
+	  &sidconf_new("hw-visual-tty", "tty2") . "\n";
+	$third_section .= "# tty2 auto-connection
+relate tty2 \"hw-uart-ns16550 uart2\" uart2
+";
+      }
+
+    if ($opt_board =~ /uart1:([0-9]+)/)
+      {
+	$port = $1;
+
+	$first_section .= "# uart1 socket\n" .
+	  &sidconf_new("sid-io-socket-server", "uart1-console") . "\n";
+
+	$second_section .= "# uart1 socketio config
+connect-pin host-sched 3-event -> uart1-console poll-event
+connect-pin host-sched 3-control <- uart1-console poll-control
+set uart1-console verbose? $opt_verbose
+set uart1-console sockaddr-local 0.0.0.0:$port
+connect-pin init-sequence output-2 -> uart1-console init
+connect-pin deinit-sequence output-6 -> uart1-console fini
+# make big receive fifo
+set uart1 in-fifo-length 4096
+";
+
+	$third_section .= "# uart1 <-> socket
+connect-pin uart1 Sout -> uart1-console tx
+connect-pin uart1 Sin <- uart1-console rx
+";
+      }
+
+    if ($opt_board =~ /uart2:([0-9]+)/)
+      {
+	$port = $1;
+
+	$first_section .= "# uart2 socket\n" .
+	  &sidconf_new("sid-io-socket-server", "uart2-console") . "\n";
+
+	$second_section .= "# uart2 socketio config
+connect-pin host-sched 4-event -> uart2-console poll-event
+connect-pin host-sched 4-control <- uart2-console poll-control
+set uart2-console verbose? $opt_verbose
+set uart2-console sockaddr-local 0.0.0.0:$port
+connect-pin init-sequence output-2 -> uart2-console init
+connect-pin deinit-sequence output-6 -> uart2-console fini
+# make big receive fifo
+set uart2 in-fifo-length 4096
+";
+
+	$third_section .= "# uart2 <-> socket
+connect-pin uart2 Sout -> uart2-console tx
+connect-pin uart2 Sin <- uart2-console rx
+";
+      }
+
+    if ($opt_board =~ /uart1:gdb/ && $opt_gdb != 0)
+      {
+	$third_section .= "# uart1 <-> cpu-gdb also
+connect-pin uart1 Sout -> cpu-gdb target-tx
+";
+      }
+
+    if ($opt_board =~ /uart2:gdb/ && $opt_gdb != 0)
+      {
+	$third_section .= "# uart2 <-> cpu-gdb also
+connect-pin uart2 Sout -> cpu-gdb target-tx
+";
+      }
+  }
+
+
+sub configure_harvard_bus
+  {
+    my $cpu = $_[0];
+
+    $first_section .= "# $cpu harvard bus mappers\n" .
+	  &sidconf_new("hw-mapper-basic", "data-mapper") . "\n" .
+	  &sidconf_new("hw-mapper-basic", "insn-mapper") . "\n";
+
+if (($cpu eq "ubicom32") || ($cpu eq "ubicom32mars") || ($cpu eq "ubicom32jupiter") || ($opt_cpu eq "ubicom32ares"))
+{
+    $second_section .= "# $cpu harvard bus specific.
+disconnect-bus cpu insn-memory $bus_upstream
+connect-bus cpu insn-memory data-mapper access-port
+disconnect-bus cpu data-memory $bus_upstream
+";
+}
+else
+{
+    $second_section .= "# $cpu harvard bus specific.
+disconnect-bus cpu insn-memory $bus_upstream
+connect-bus cpu insn-memory insn-mapper access-port
+disconnect-bus cpu data-memory $bus_upstream
+";
+  }
+    if ($opt_trace_core || $opt_trace_core_visual)
+      {
+        $second_section .= "# $cpu harvard bus data probe.
+connect-bus cpu data-memory bus-probe upstream
+disconnect-bus bus-probe downstream cpu-mapper access-port
+connect-bus bus-probe downstream data-mapper access-port
+";
+      }
+    else
+      {
+    $second_section .= "# $cpu harvard bus data mapping.
+connect-bus cpu data-memory data-mapper access-port
+";
+      }
+
+    if ($opt_board =~ /gloss/)
+      {
+        $second_section .= "# $cpu harvard bus specific gloss .
+disconnect-bus gloss target-memory $bus_upstream
+connect-bus gloss target-memory data-mapper access-port
+";
+      }
+
+  }
+
+sub configure_mep_cached_bus
+  {
+    my $addrspace = $_[0];
+    my $cachetype = $_[1];
+    my $dsu_p = $_[2];
+
+    $first_section .= "# $addrspace caching
+new hw-mapper-transparent cpu-${addrspace}-cachefilter
+new hw-cache-$cachetype cpu-${addrspace}-cache
+set cpu-${addrspace}-cache hit-latency 1
+set cpu-${addrspace}-cache miss-latency 1
+connect-pin cpu ${addrspace}-cache-enable -> cpu-${addrspace}-cachefilter bank
+connect-pin cache-flush-net output-0 -> cpu-${addrspace}-cache flush-all
+connect-pin cache-flush-net output-1 -> cpu-${addrspace}-cache invalidate-all
+";
+    $second_section .= "# $addrspace cache filtering
+disconnect-bus cpu ${addrspace}-memory $bus_upstream
+";
+
+    if ($addrspace eq "insn") {
+      $second_section .= "connect-bus cpu insn-memory cpu-insn-buffer upstream\n";
+      $cpubus = "cpu-insn-buffer downstream";
+    } else {
+      $cpubus = "cpu data-memory";
+    }
+
+    if ($dsu_p) {
+      $second_section .= "connect-bus $cpubus cpu-dsu ${addrspace}-upstream
+connect-bus cpu-dsu ${addrspace}-downstream cpu-${addrspace}-cachefilter access-port
+";
+    } else {
+      $second_section .= "connect-bus $cpubus cpu-${addrspace}-cachefilter access-port\n";
+    }
+
+    $second_section .=
+"connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0x00000000-0x007FFFFF]{0,1}:uncacheable cpu-mapper access-port
+connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0x00800000-0x7FFFFFFF]{1}:cached cpu-${addrspace}-cache upstream
+connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0x00800000-0x7FFFFFFF]{0}:uncached cpu-mapper access-port
+connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0x80000000-0xBFFFFFFF]{0,1}:uncacheable cpu-mapper access-port
+connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0xC0000000-0xFFFFFFFF]{1}:cached cpu-${addrspace}-cache upstream
+connect-bus cpu-${addrspace}-cachefilter ${addrspace}:[0xC0000000-0xFFFFFFFF]{0}:uncached cpu-mapper access-port
+connect-bus cpu-${addrspace}-cache downstream cpu-mapper access-port
+# $addrspace cache setup
+set cpu-${addrspace}-cache report-heading \"${addrspace} profile report\"
+connect-pin init-sequence output-1 -> cpu-${addrspace}-cache invalidate-all\n" .
+  ($opt_trace_counter ? "connect-pin deinit-sequence output-6 -> cpu-${addrspace}-cache report!\n" : "");
+  }
+
+if ($opt_cpu eq "arm")
+  {
+    $enable_z_packet = "true";
+  }
+
+if ($opt_cpu eq "mt")
+  {
+    $enable_z_packet = "true";
+  }
+
+if ($opt_cpu eq "sh5")
+  {
+    $enable_z_packet = "true";
+  }
+
+if ($opt_cpu eq "xstormy16")
+  {
+    $enable_z_packet = "true";
+  }
+
+if ($opt_cpu eq "mep")
+  {
+    $enable_z_packet = "true";
+  }
+
+if (($opt_cpu eq "ubicom32") || ($opt_cpu eq "ubicom32mars") || ($opt_cpu eq "ubicom32jupiter") || ($opt_cpu eq "ubicom32ares"))
+  {
+    if($opt_mailbox != 0)
+      {
+	 #Setup stuff for the 4k mailbox
+	  $first_section .= "#ubicom32 mailbox setup\n" .
+	      &sidconf_new("hw-ubicom32-mailbox", "mailbox") . "\n" .
+		  &sidconf_new("sid-io-socket-server", "mailbox-socket") . "\n";
+
+          $second_section .= "# mailbox-socket
+connect-pin init-sequence output-7 -> mailbox-socket init
+connect-pin deinit-sequence output-6 -> mailbox-socket fini
+connect-pin mailbox-socket rx -> mailbox remote-rx
+connect-pin mailbox-socket tx <- mailbox remote-tx
+connect-pin host-sched 6-event -> mailbox-socket poll-event
+connect-pin host-sched 6-control <- mailbox-socket poll-control
+set mailbox-socket sockaddr-local 0.0.0.0:$opt_mailbox
+set mailbox-socket verbose? $opt_verbose
+connect-pin mailbox interrupt -> cpu mbox-interrupt
+connect-pin hw-reset-net output-0 -> mailbox reset
+";
+	  $third_section .= "# mailbox
+connect-bus data-mapper mailbox:[0xb00,0xb0b] mailbox Mbox-Bus
+";
+      }
+
+    $enable_z_packet = "true";
+    # FIXME: Rerouting not necessary anymore
+    $load_mapper_data = "data-mapper access-port";
+    $load_mapper_insn = "data-mapper access-port";
+    configure_harvard_bus($opt_cpu);
+    if ($opt_board =~ /gloss/)
+      {
+	# 
+        $second_section .= "# ubicom32 specific gloss .
+disconnect-bus gloss target-memory data-mapper access-port
+connect-bus gloss target-memory cpu data-bus
+";
+      }
+    $third_section .= "";
+    if ($opt_cpu eq "ubicom32")
+{
+    $third_section .= "# ubicom32 harvard-bus mapping .
+connect-bus cpu-mapper data[0x100000,0x10ffff] data-mapper access-port
+connect-bus cpu-mapper data[0x400000,0x4fffff] data-mapper access-port
+connect-bus cpu-mapper insn[0x20000000,0x203fffff] insn-mapper access-port
+connect-bus cpu-mapper insn[0x40000000,0xc007ffff] insn-mapper access-port
+";
+}
+    if ($opt_board =~ /gloss/ && !($opt_board =~ /chiphw/))
+      {
+        $third_section .= "# ubicom32 gloss memory\n" .
+	  &sidconf_new("hw-memory-ram/rom-basic", "gloss-data") . "\n" .
+          "set gloss-data size 0x1000000\n" .
+  &sidconf_new("hw-memory-ram/rom-basic", "gloss-insn-flash") . "\n" .
+          "set gloss-insn-flash size 0x400000\n" .
+  &sidconf_new("hw-memory-ram/rom-basic", "gloss-insn") . "\n" .
+          "set gloss-insn size 0x1000000\n";
+	if( $opt_cpu eq "ubicom32") 
+	   {
+	       $third_section .= "# ubicom32 gloss memory mapping .
+connect-bus data-mapper data[0x100000,0x10ffff] gloss-data read-write-port
+connect-bus data-mapper insn[0x20000000,0x203fffff] gloss-insn-flash read-write-port
+connect-bus data-mapper insn[0x40000000,0x40ffffff] gloss-insn read-write-port
+";
+           }
+        elsif ( ($opt_cpu eq "ubicom32mars") || ($opt_cpu eq "ubicom32jupiter") || ($opt_cpu eq "ubicom32ares"))
+	   {
+	       $third_section .= "# ubicom32 gloss memory mapping .
+connect-bus data-mapper data[0x03000000,0x0302ffff] gloss-data read-write-port
+connect-bus data-mapper insn[0x40000000,0x40ffffff] gloss-insn-flash read-write-port
+";
+	   }
+
+	$third_section .= "# ubicom32 syscall enablement
+set cpu syscall-trap 57
+";
+      }
+  }
+
+# --engine
+if ($opt_engine eq "pbb")
+  {
+# FIXME: the x86 component should support this setting
+    if ($opt_cpu ne "x86")
+      {
+	$second_section .= "set cpu engine-type pbb\n";
+      } 
+  }
+elsif ($opt_engine eq "scache")
+  {
+    $second_section .= "set cpu engine-type scache\n";
+  }
+else
+  {
+    die "Invalid engine type $opt_engine\n";
+  }
+
+
+# --gdb
+# Generate a gdb component for each processor requested.
+$non_cpu_gdbs=0;
+foreach $processor (keys %opt_gdbport)
+  {
+    $first_section .= "# $processor gdb\n" .
+      &sidconf_new("sw-debug-gdb", "${processor}-gdb") . "\n" .
+      &sidconf_new("sid-io-socket-server", "${processor}-gdb-socket") . "\n";
+    $second_section .= "# ${processor}-gdb
+relate ${processor}-gdb cpu $processor
+relate ${processor}-gdb cfgroot main
+relate ${processor}-gdb target-schedulers target-sched
+relate ${processor}-gdb host-schedulers host-sched
+connect-pin ${processor}-gdb process-signal -> main stop!
+connect-pin init-sequence output-3 -> ${processor}-gdb init
+connect-pin deinit-sequence output-5 -> ${processor}-gdb deinit
+connect-pin ${processor}-gdb yield -> yield-net input
+connect-pin ${processor}-gdb flush-icache -> cache-flush-net input
+connect-pin cache-flush-net output-1 -> $processor flush-icache
+connect-pin ${processor}-gdb restart -> hw-reset-net input
+set ${processor}-gdb exit-on-detach? 1\n" .
+($opt_verbose ? "set ${processor}-gdb trace-gdbsid? $opt_verbose\n" : "") .
+($opt_verbose ? "set ${processor}-gdb trace-gdbserv? $opt_verbose\n" : "") .
+"# ${processor}-gdb-socket
+connect-pin init-sequence output-2 -> ${processor}-gdb-socket init
+connect-pin deinit-sequence output-6 -> ${processor}-gdb-socket fini
+connect-pin ${processor}-gdb-socket rx -> ${processor}-gdb remote-rx
+connect-pin ${processor}-gdb-socket tx <- ${processor}-gdb remote-tx
+connect-pin host-sched 6-event -> ${processor}-gdb-socket poll-event
+connect-pin host-sched 6-control <- ${processor}-gdb-socket poll-control
+set ${processor}-gdb-socket sockaddr-local 0.0.0.0:$opt_gdbport{$processor}\n" .
+($opt_verbose ? "set ${processor}-gdb-socket verbose? $opt_verbose\n" : "");
+    if ($processor ne "cpu")
+      {
+	$non_cpu_gdbs ++;
+      }
+  }
+
+# Update the enable thresholds of the shedulers to account for GDB components
+# attached to processors other than the cpu.
+if ($non_cpu_gdbs != 0)
+  {
+    $opt_persistent = 1;
+    $sched_threshold = $non_cpu_gdbs + 1;
+    $third_section .= "
+# We want the target scheduler to come up enabled, so update the enabled?
+# attribute to match the threshold. The GDB components will take care of
+# disabling it when necessary.
+set target-sched enable-threshold $sched_threshold
+set target-sched enabled? $sched_threshold
+";
+  }
+
+# Additional settings for main cpu gdb.
+if ($opt_gdb)
+  {
+    if ($opt_board =~ /gloss/)
+      {
+	$second_section .= "# gdb w/ gloss
+connect-pin gloss trap-chain <-> cpu-gdb trap
+connect-pin gloss trap-code-chain -> cpu-gdb trap-code
+connect-pin gloss process-signal -> cpu-gdb gloss-process-signal
+connect-pin gloss debug-tx -> cpu-gdb target-tx
+relate cpu-gdb gloss gloss
+set cpu-gdb enable-Z-packet? $enable_z_packet
+set cpu-gdb operating-mode? false
+";
+      }
+    else
+      {
+	$second_section .= "# gdb w/o gloss
+connect-pin cpu trap <-> cpu-gdb trap
+connect-pin cpu trap-code -> cpu-gdb trap-code
+";
+      }
+  }
+
+# Generate a loader for each processor
+foreach $processor (keys %opt_load)
+  {
+    $first_section .= "# ${processor} loader\n" .
+	&sidconf_new("sw-load-elf", "${processor}-loader") . "\n";
+    $second_section .= "# ${processor} loader
+set ${processor}-loader file \"$opt_load{$processor}\" \n" .
+($opt_verbose ? "set ${processor}-loader verbose? $opt_verbose\n" : "");
+
+    # Have the loader write data via $load_mapper_data for the "cpu" processor
+    if ($processor eq "cpu")
+      {
+	  $second_section .=
+	      "connect-bus ${processor}-loader load-accessor-data $load_mapper_data\n";
+      }
+    else
+      {
+	  $second_section .=
+	      "connect-bus ${processor}-loader load-accessor-data ${processor}-mapper access-port # don't trace loading\n";
+      }
+
+    $second_section .=
+	"connect-bus ${processor}-loader load-accessor-insn ${processor}-mapper access-port # don't trace loading
+connect-pin init-sequence output-1 -> ${processor}-loader load!
+connect-pin ${processor}-loader start-pc-set -> ${processor} start-pc-set!
+connect-pin ${processor}-loader endian-set -> ${processor} endian-set!
+connect-pin ${processor}-loader error -> main stop!
+";
+  }
+
+# --trace-core-visual
+
+if ($opt_trace_core_visual != 0)
+  {
+    $any_tcl = 1;
+
+    $first_section .= "# visual bus access viewer\n" .
+      &sidconf_new("hw-visual-probe-bus", "visual-bus-probe") . "\n";
+    $second_section .= "# visual bus access viewer
+set visual-bus-probe addr2line-cmd \"arm-elf-addr2line -C -f -e $exec\"
+relate visual-bus-probe cpu cpu
+connect-pin bus-probe address -> visual-bus-probe address
+connect-pin bus-probe data-high -> visual-bus-probe data-high
+connect-pin bus-probe data-low -> visual-bus-probe data-low
+connect-pin bus-probe status -> visual-bus-probe status
+connect-pin bus-probe type -> visual-bus-probe type
+";
+  }
+
+# --tksm
+if ($opt_tksm != 0)
+  {
+    $any_tcl = 1;
+
+    $first_section .= "# tk system monitor\n" .
+      &sidconf_new("sid-control-tksm", "tksm") . "\n";
+
+    $second_section .= "# tk system monitor
+relate main component-catalog-informees tksm
+# refresh
+set host-sched 1-regular? 1
+set host-sched 1-time 1000
+connect-pin host-sched 1-event -> tksm refresh
+";
+  }
+
+if ($opt_tksm && $opt_gdb)
+  {
+    $third_section .= "# triggerpoint signal
+connect-pin tksm triggerpoint-hit -> cpu-gdb stop-target
+";
+  }
+
+
+# ----------------------------------------------------------------------------
+# Memory logic.
+
+$mems = 0;
+while ($#opt_memory_region >= 0)
+  {
+    $spec = shift @opt_memory_region;
+    $mems ++;
+    # Format: BASE,SIZE
+    #         [,bus=MAPPER]
+    #         [,read-only]
+    #         [,alias=BASE2]
+    #         [,file=NAME]
+    #         [,mmap]
+    #         [,latency=R[:W]]
+    #         [,relate=COMPONENT/RELATION]  (deprecated)
+    @spec = split /,/, $spec;
+
+    # print STDERR "spec=$spec\n";
+    die "Cannot parse memory region specification `$spec'.\n" if ($#spec < 1);
+
+    $base = shift @spec;
+    $base = oct($base) if ($base =~ /^0/);
+    $size = shift @spec;
+    $size = oct($size) if ($size =~ /^0/);
+
+    die "Illegal memory region size `$size'\n" if ($size <= 0);
+
+    $last = $base + $size - 1;
+    $membus = "read-write-port"; # default read-write
+    $memfile = ""; # default no file
+    $memmapper = "cpu-mapper";
+    $mmap = 0; # default no mmap
+    $latr = 0; $latw = 0; # default no latencies
+    @aliases = ();
+    @relates = ();
+
+    # common stuff
+    $first_section .= "# memory region $mems ($spec)\n" .
+      &sidconf_new("hw-memory-ram/rom-basic", "mem$mems") . "\n";
+    $third_section .= "# memory region $mems ($spec) configuration\n" .
+      "set mem$mems size $size\n";
+
+    # consume other options
+    while ($#spec >= 0)
+      {
+	$opt = shift @spec;
+	if ($opt eq "read-only") { $membus = "read-only-port"; }
+	elsif ($opt eq "mmap") { $mmap = 1; }
+	elsif ($opt =~ /bus=(.+)/) { $memmapper = $1; }
+	elsif ($opt =~ /file=(.+)/) { $memfile = $1; }
+	elsif ($opt =~ /alias=(.+)/) { push @aliases, $1 }
+	elsif ($opt =~ /relate=(.+)/) { push @relates, $1 }
+	elsif ($opt =~ /latency=(\d+):(\d+)/) { $latr = $1; $latw = $2 }
+	elsif ($opt =~ /latency=(\d+)/) { $latr = $1; $latw = $1 }
+	else { die "Cannot parse memory region option `$opt'.\n"; }
+      }
+
+    # process memory maps
+    $third_section .= "connect-bus $memmapper mem$mems:[$base,$last] mem$mems $membus\n";
+
+    foreach $alias (@aliases)
+      {
+	$alias = oct($alias) if ($alias =~ /^0/);
+	$aliasend = $alias + $size - 1;
+	$third_section .= "connect-bus $memmapper mem$mems:[$alias,$aliasend] mem$mems $membus\n";
+      }
+
+    foreach $relate (@relates) {
+      $relate =~ /(.*)\/(.*)/;
+      $third_section .= "relate $1 $2 mem$mems\n";
+    }
+
+    # process file backing store
+    if ($memfile)
+      {
+	$third_section .= "set mem$mems image-file \"$memfile\"\n";
+
+	if ($mmap) {
+	  $third_section .= "connect-pin init-sequence output-1 -> mem$mems image-mmap\n";
+	} else {
+	  $third_section .= "connect-pin init-sequence output-1 -> mem$mems image-load\n";
+	}
+
+	# save only if memory was writeable and not memory-mapped
+	if ($membus eq "read-write-port" && !$mmap) {
+	  $third_section .= "connect-pin deinit-sequence output-6 -> mem$mems image-store\n";
+	}
+      }
+
+    # process latencies
+    if ($latr != 0) { $third_section .= "set mem$mems read-latency $latr\n" }
+    if ($latw != 0) { $third_section .= "set mem$mems write-latency $latw\n" }
+  }
+
+
+# ----------------------------------------------------------------------------
+# Really miscellanous stuff.
+
+# sidrtc: 8 bytes
+if ($opt_sidrtc)
+  {
+    $addr = $opt_sidrtc;
+    $addr = oct($addr) if ($addr =~ /^0/);
+    $addrend = $addr + 7;
+
+    $first_section .= "# special rtc\n" .
+      &sidconf_new("hw-rtc-sid", "sidrtc") . "\n";
+
+    $third_section .= "# special rtc mapping
+connect-bus cpu-mapper sidrtc:[$addr,$addrend] sidrtc registers
+";
+  }
+
+
+# sidcodec: 20 bytes
+if ($opt_sidcodec)
+  {
+    $addr = $opt_sidcodec;
+    $addr = oct($addr) if ($addr =~ /^0/);
+    $addrend = $addr + 19;
+
+    $first_section .= "# special codec & host audio\n" .
+      &sidconf_new("hw-audio-sid", "sidcodec") . "\n" .
+      &sidconf_new("sid-io-audio", "sidaudio") . "\n" .
+      "";
+
+    $third_section .= "# special codec mapping
+connect-bus cpu-mapper sidcodec:[$addr,$addrend] sidcodec registers
+# codec <-> host audio connections
+connect-pin sidcodec tx-sample -> sidaudio tx-sample
+connect-pin sidcodec rx-sample <- sidaudio rx-sample
+connect-pin sidcodec tx-mode -> sidaudio tx-mode
+connect-pin sidcodec tx-pending <- sidaudio tx-pending
+connect-pin sidcodec rx-mode -> sidaudio rx-mode
+connect-pin sidcodec rx-pending <- sidaudio rx-pending
+connect-pin sidcodec config-set -> sidaudio config-set
+# host audio polling
+set host-sched 7-regular? 1
+set host-sched 7-time 100
+connect-pin host-sched 7-event -> sidaudio poll
+";
+  }
+
+# --tksched
+if ($opt_tksched != 0)
+  {
+    $any_tcl = 1;
+
+    $first_section .= "# tk visual scheduler controller\n" .
+      &sidconf_new("sid-visual-sched", "tksched") . "\n";
+
+    $second_section .= "# tk system monitor
+relate tksched scheduler target-sched
+";
+  }
+
+# any tcl stuff?
+if ($any_tcl)
+  {
+    $first_section .= "# tcl/tk adaptive event polling" . "\n" .
+      &sidconf_new("bridge-tcl", "tcl-event-consumer") . "\n";
+    $third_section .= "# tcl/tk adaptive event polling
+connect-pin host-sched 2-event -> tcl-event-consumer !event
+connect-pin host-sched 2-control <- tcl-event-consumer !event-control
+connect-pin init-sequence output-7 -> tcl-event-consumer !event
+";
+  }
+
+
+# add dso commands
+foreach $lib (sort keys %component_libs)
+  {
+    $symbol = $component_libs{$lib};
+    $lib_la = "lib" . $lib . ".la";
+
+    # minor optimization: don't include large tcl dll unless needed
+    next if ($any_tcl == 0 && $lib eq "tclapi");
+
+    $zeroth_section .= "load $lib_la $symbol\n";
+  }
+
+
+# ----------------------------------------------------------------------------
+if ($opt_persistent) { $zeroth_section .= "set main persistent? true\n"; }
+
+# Build config file
+$tmpdir = $ENV{'TMPDIR'} ? $ENV{'TMPDIR'} : "/tmp";
+$basename = $exec ne "" ? `basename $exec` : "sid";
+chomp($basename);
+$tfile = $opt_save_temps ? "$basename.conf" : "$tmpdir/$basename-$$.conf";
+open CONFIG, ">$tfile" || die ("Cannot write to $tfile\n");
+print CONFIG $zeroth_section;
+print CONFIG $first_section;
+print CONFIG $second_section;
+print CONFIG $third_section;
+close CONFIG;
+
+# ----------------------------------------------------------------------------
+# Exit early?
+
+if ($opt_save_temps)
+  {
+    print "Configuration file saved to `$tfile'.\n";
+  }
+
+if ($opt_no_run)
+  {
+    exit (0);
+  }
+
+
+# ----------------------------------------------------------------------------
+# (Generate and) run a simulator
+
+@args = ("$sid");
+push @args, ($tfile);
+
+# spawn sid child process
+system @args;
+$exit_value = $?;
+
+# Process the exit code.
+if (($exit_value & 0xff00) == 0xff00) # catch old perls' fork rc bugs
+ {
+   print "\nCannot run `@args': $!\n";
+ }
+
+if (! $opt_save_temps)
+  {
+    unlink $tfile;
+  }
+
+exit ($exit_value >> 8);
+
+
+# ----------------------------------------------------------------------------
+
+
+sub sidconf_new {
+  my ($comptype,$compname) = @_;
+  my $wrap_this = 0;
+  for ($i=0; $i<scalar(@opt_wrap); $i++) {
+    if ($opt_wrap[$i] eq $compname) {
+      $wrap_this = 1;
+      $any_tcl = 1;
+    }
+  }
+  # print $wrap_this == 0 ? "not" : "";
+  # print " wrapping $compname $comptype\n";
+  if ($wrap_this)
+    {
+      return "new sid-api-trace ${compname}
+new ${comptype} ${compname}-traced
+relate ${compname} victim ${compname}-traced";
+    }
+  else
+    {
+      return "new ${comptype} ${compname}";
+    }
+}
+
+
+# Local Variables:
+# mode: perl
+# End:

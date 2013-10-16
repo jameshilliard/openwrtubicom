@@ -1,0 +1,225 @@
+          hw-parport-ps/2 (libparport.la :: parport_component_library)
+
+Synopsis:
+
+   This component models a PS/2-style parallel port controller.
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+   The PS/2 parallel port controller is a simple 8-bit I/O interface to a
+   printer. From its origins, the parallel port system has evolved into
+   higher functionality IEEE-1284 controllers, but this sid component
+   implements a version of the simple original standard.
+
+   The specific hardware being modelled is the parallel port part of the Exar
+   16C552 device.
+
+   +----------------------------------------------------+
+   |                     Behaviors                      |
+   |----------------------------------------------------|
+   |register|Byte-wide operations on the registers bus  |
+   |  access|access control registers of the model. The |
+   |        |control registers are also exported as     |
+   |        |attributes.                                |
+   |        |                                           |
+   |        |+-----------------------------------------+|
+   |        || name    | address | values | permitted  ||
+   |        ||         |         |        | accesses   ||
+   |        ||---------+---------+--------+------------||
+   |        || Port    | 0x00    | 0x00 - | read/write ||
+   |        ||         |         | 0xFF   |            ||
+   |        ||---------+---------+--------+------------||
+   |        || IO      | 0x01    | 0x00 - | write      ||
+   |        || Select  |         | 0xFF   |            ||
+   |        ||---------+---------+--------+------------||
+   |        || Control | 0x02    | 0xC0 - | write      ||
+   |        ||         |         | 0xFF   |            ||
+   |        ||---------+---------+--------+------------||
+   |        || Status  | 0x01    | 0x03 - | read       ||
+   |        ||         |         | 0xFF   |            ||
+   |        ||---------+---------+--------+------------||
+   |        || Command | 0x02    | 0xE0 - | read       ||
+   |        ||         |         | 0xFF   |            ||
+   |        |+-----------------------------------------+|
+   |--------+-------------------------------------------|
+   |parallel|In the default output-only mode, a data    |
+   |     i/o|byte written to the Port control register  |
+   |        |is transmitted bit-by-bit to the PD0..PD7  |
+   |        |output pins. The parallel port controller  |
+   |        |model may be switched into the input mode  |
+   |        |by using the appropriate combination of    |
+   |        |signals on the BIDEN pin, the I/O Select   |
+   |        |register, and a bit in the Control         |
+   |        |register. In this mode, signals driven onto|
+   |        |the PD0..PD7 input pins are forwarded to   |
+   |        |the Port control register. The usual       |
+   |        |parallel port handshaking signals (STROBE, |
+   |        |ACK, ERROR, ERROR, BUSY, PE) are used to   |
+   |        |carry out the Centronics printer protocol. |
+   |        |The appropriate pins use an "active-low"   |
+   |        |polarity, which means that zero is         |
+   |        |interpreted as an asserted signal, and     |
+   |        |non-zero as a deasserted signal. Tri-state |
+   |        |signals in hardware are not specifically   |
+   |        |modelled.                                  |
+   |--------+-------------------------------------------|
+   |   reset|When the RESET input pin is driven, control|
+   |        |registers and pins return to their usual   |
+   |        |power-on states.                           |
+   +----------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                 SID Conventions                 |
+   |-------------------------------------------------|
+   |          functional | supported       | -       |
+   |---------------------+-----------------+---------|
+   |        save/restore | supported       | -       |
+   |---------------------+-----------------+---------|
+   |       triggerpoints | supported       | -       |
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components
+
+   This component is customarily attached to a source of a reset signal. The
+   PD0..PD7 pins may be connected to simulated switches or indicators as
+   needed.
+
+         new hw-parport-ps/2 pport
+         new hw-cpu-foo cpu
+         new hw-mapper-basic mapper
+         new hw-blinker-light led
+         connect-pin main starting -> pport RESET
+         connect-pin pport INTP -> cpu interrupt
+         connect-pin pport PD0 -> led signal
+         connect-bus mapper [0x3f0-0x3f8,4,1] pport Bus
+    
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: hw-parport-ps/2
+
+   +-------------------------------------------------+
+   |                      pins                       |
+   |-------------------------------------------------|
+   |   name   | direction | legalvalues | behaviors  |
+   |----------+-----------+-------------+------------|
+   | STROBE   | out       | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | AUTOFDXT | out       | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | SLCTIN   | out       | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | INIT     | out       | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | INTP     | out       | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | ERROR    | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | SLCT     | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | PE       | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | ACK      | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | BUSY     | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | INTSEL   | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | BIDEN    | in        | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   |----------+-----------+-------------+------------|
+   | RESET    | in        | any         | reset      |
+   |----------+-----------+-------------+------------|
+   | PD0..PD7 | inout     | 0, 1        | parallel   |
+   |          |           |             | i/o        |
+   +-------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                      buses                      |
+   |-------------------------------------------------|
+   | name | addresses |     accesses     | behaviors |
+   |------+-----------+------------------+-----------|
+   | Bus  | 0x00 -    | byte-wide-access | register  |
+   |      | 0x02      | only             | access    |
+   +-------------------------------------------------+
+
+   +-----------------------------------------------------+
+   |                     attributes                      |
+   |-----------------------------------------------------|
+   |     name     |category| legal |default| behaviors  ||
+   |              |        |values | value |            ||
+   |--------------+--------+-------+-------+------------||
+   |STROBE        |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |AUTOFDXT      |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |SLCTIN        |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |INIT          |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |INTP          |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |ERROR         |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |SLCT          |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |PE            |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |ACK           |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |BUSY          |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |INTSEL        |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |BIDEN         |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |RESET         |pin     |any    |-      |reset       ||
+   |--------------+--------+-------+-------+------------||
+   |PD0..PD7      |pin     |0, 1   |-      |parallel i/o||
+   |--------------+--------+-------+-------+------------||
+   |PR            |register|numeric|-      |register    ||
+   |              |        |string |       |access      ||
+   |--------------+--------+-------+-------+------------||
+   |SR            |register|numeric|-      |register    ||
+   |              |        |string |       |access      ||
+   |--------------+--------+-------+-------+------------||
+   |COM           |register|numeric|-      |register    ||
+   |              |        |string |       |access      ||
+   |--------------+--------+-------+-------+------------||
+   |CON           |register|numeric|-      |register    ||
+   |              |        |string |       |access      ||
+   |--------------+--------+-------+-------+------------||
+   |IOSEL         |register|numeric|-      |register    ||
+   |              |        |string |       |access      ||
+   |--------------+--------+-------+-------+------------||
+   |state-snapshot|-       |opaque |-      |state       ||
+   |              |        |string |       |save/restore||
+   +-----------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+References:
+
+     * http://imeg.com/jadtech/ieee.htm
+     * http://www.exar.com/products/st16c552_a.html

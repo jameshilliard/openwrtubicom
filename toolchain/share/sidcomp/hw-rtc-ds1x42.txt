@@ -1,0 +1,221 @@
+               hw-rtc-ds1x42 (librtc.la :: rtc_component_library)
+
+Synopsis:
+
+   The Dallas DS1642 and DS1742 are time-keeping NVRAM devices. The DS1742 is
+   Y2K compliant as it maintains a century field in a section of NVRAM that
+   was previously reserved by Dallas in the DS1642.
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+   The DS1x42 components model real time using a single pin that can be
+   driven at a simulated interval representing one second. For modelling time
+   in the target domain, a target scheduler may be used. For modelling real
+   "wall-clock" time, the host scheduler may be used.
+
+   The DS1x42 have a "frequency test" function that involves toggling the
+   least significant bit of the "seconds" register at an idealized frequency
+   of 512Hz. When managed by a sid scheduler component, the actual frequency
+   is around 500Hz.
+
+   +-------------------------------------------------+
+   |                    Behaviors                    |
+   |-------------------------------------------------|
+   | timekeeping | Whenever the clock input is       |
+   |             | driven, it is interpreted as a    |
+   |             | signal that one second has        |
+   |             | passed. An internal counter is    |
+   |             | incremented and all the           |
+   |             | time-related registers are        |
+   |             | recomputed. The counter is        |
+   |             | accessible by the epoch-time      |
+   |             | attribute.                        |
+   |-------------+-----------------------------------|
+   |   frequency | When the clock-control and        |
+   |     testing | clock-event pin-pair is connected |
+   |             | to an external scheduler, the     |
+   |             | DS1642 standard "test bit" is     |
+   |             | toggled at an approximate         |
+   |             | simulated frequency.              |
+   |-------------+-----------------------------------|
+   |    register | The DS1642/DS1742 control         |
+   |      access | registers and 2048-byte NVRAM are |
+   |             | accessed across the               |
+   |             | read-write-port bus for byte-wide |
+   |             | operations. The control registers |
+   |             | are also exposed as attributes.   |
+   |             |                                   |
+   |             | This family of parts includes 2KB |
+   |             | of non-volatile RAM. This         |
+   |             | component does not explicitly     |
+   |             | model this memory. Instead, it    |
+   |             | interacts through the memory-bus  |
+   |             | accessor with an external memory  |
+   |             | like hw-memory-ram/rom-basic.     |
+   +-------------------------------------------------+
+
+   +----------------------------------------------------------+
+   |                     SID Conventions                      |
+   |----------------------------------------------------------|
+   |   functional|supported|-                                 |
+   |-------------+---------+----------------------------------|
+   | save/restore|supported|-                                 |
+   |-------------+---------+----------------------------------|
+   |triggerpoints|supported|They support setting triggerpoints|
+   |             |         |on the state of data with the     |
+   |             |         |following names:                  |
+   |             |         |                                  |
+   |             |         |+--------------------------------+|
+   |             |         ||               | Canonical      ||
+   |             |         || "epoch-time"  | internal       ||
+   |             |         ||               | representation ||
+   |             |         ||               | of time.       ||
+   |             |         ||---------------+----------------||
+   |             |         || "oscillating" | The oscillator ||
+   |             |         ||               | is connected.  ||
+   |             |         ||---------------+----------------||
+   |             |         ||               | The device is  ||
+   |             |         || "write-mode"  | in write mode, ||
+   |             |         ||               | for updates.   ||
+   |             |         |+--------------------------------+|
+   +----------------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components
+     * The 2KB of non-volatile memory included in these parts is not
+       explicitly modeled by this component. Instead, it uses the
+       "memory-bus" accessor to interact with an external memory like
+       hw-memory-ram/rom-basic:
+
+           new hw-memory-ram/rom-basic nvram
+           set nvram size 2048
+           connect-bus rtc memory-bus nvram read-write-port
+
+     * In order to enable the "frequency test" function, you need to couple
+       an external scheduler to this component. The following is an example
+       of how to configure such a connection between a scheduler and the
+       DS1742 component:
+
+           new sid-sched-host-accurate sched
+           new hw-rtc-ds1742 rtc
+           set sched num-clients 2
+           set sched 0-regular? 1
+           set sched 0-time 1000 # 1 sec
+           connect-pin sched 0-event -> rtc clock
+           connect-pin rtc clock-control -> sched 1-control
+           connect-pin rtc clock-event <- sched 1-event
+
+     * The hw-visual-clock component is a candidate gui for this component.
+
+           new hw-rtc-ds1742 rtc
+           new hw-visual-clock rtc-gui
+           relate rtc-gui "your rtc friend" rtc
+
+   Host system
+     * These components rely on the accuracy and integrity of UTC time
+       maintained by the host, as the time and date are initialized when the
+       component is instantiated. The UNIX time() system call is used to
+       acquire the time.
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: hw-rtc-ds1x42 (Abstract)
+
+   +-------------------------------------------------+
+   |                      pins                       |
+   |-------------------------------------------------|
+   |    name     |direction|legalvalues|  behaviors  |
+   |-------------+---------+-----------+-------------|
+   |clock        |in       |-          |timekeeping  |
+   |-------------+---------+-----------+-------------|
+   |clock-control|out      |positive   |frequency    |
+   |             |         |number     |testing      |
+   |-------------+---------+-----------+-------------|
+   |clock-event  |in       |-          |frequency    |
+   |             |         |           |testing      |
+   +-------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                      buses                      |
+   |-------------------------------------------------|
+   |     name      |addresses|  accesses   |behaviors|
+   |---------------+---------+-------------+---------|
+   |read-write-port|0x0 -    |read/write   |register |
+   |               |0x7FF    |byte-wide    |access   |
+   +-------------------------------------------------+
+
+   +---------------------------------------------------------------+
+   |                          attributes                           |
+   |---------------------------------------------------------------|
+   |     name     |category|  legal values   |default| behaviors  ||
+   |              |        |                 | value |            ||
+   |--------------+--------+-----------------+-------+------------||
+   |epoch-time    |-       |uint 32          |-      |timekeeping ||
+   |--------------+--------+-----------------+-------+------------||
+   |year          |register|0..99            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |month         |register|1..12            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |date          |register|1..31            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |day-of-week   |register|1..7             |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |hour          |register|0..23            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |minute        |register|0..59            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |second        |register|0..59            |-      |register    ||
+   |              |        |                 |       |access      ||
+   |--------------+--------+-----------------+-------+------------||
+   |state-snapshot|-       |opaque           |-      |state       ||
+   |              |        |                 |       |save/restore||
+   |--------------+--------+-----------------+-------+------------||
+   |tk xclock     |-       |"hw-visual-clock"|-      |component   ||
+   |clone         |        |                 |       |gui         ||
+   +---------------------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                    accessors                    |
+   |-------------------------------------------------|
+   |     name      |  accesses   |     behaviors     |
+   |---------------+-------------+-------------------|
+   | memory-bus    | byte-wide   | register access   |
+   +-------------------------------------------------+
+
+  Variant: hw-rtc-ds1642
+
+   Same as hw-rtc-ds1x42
+
+  Variant: hw-rtc-ds1742
+
+   +-------------------------------------------------+
+   |                   attributes                    |
+   |-------------------------------------------------|
+   | name  |category|  legal  | default | behaviors ||
+   |       |        | values  |  value  |           ||
+   |-------+--------+---------+---------+-----------||
+   |century|register|19..25   |-        |register   ||
+   |       |        |         |         |access     ||
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+References:
+
+   Dallas Semiconductor DS1642 data sheet, revision 031698; DS1742 data
+   sheet, revision 091498. Available online, or in our local archives.

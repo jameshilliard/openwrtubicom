@@ -1,0 +1,344 @@
+               sid-sched (libsched.la :: sched_component_library)
+
+Synopsis:
+
+   These components manage multiple signal schedules.
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+   These components function as general purpose signal schedulers. They
+   approximately correspond to a collection of programmable clock dividers.
+
+   The number of controllable outputs ("subscriptions") is a matter of
+   configuration.
+
+   The three component types are identical, except in their notions of time.
+   See the Timing section below.
+
+   +-------------------------------------------------+
+   |                    Behaviors                    |
+   |-------------------------------------------------|
+   | configuration | When the num-clients is         |
+   |               | written-to, this component      |
+   |               | adjusts its list of scheduler   |
+   |               | clients. Each "client"          |
+   |               | corresponds to a set of "N-"    |
+   |               | pins and attributes, with its   |
+   |               | own signalling schedule. During |
+   |               | configuration, the clients can  |
+   |               | also be named using the N-name  |
+   |               | attributes, which provides a    |
+   |               | more informative name for the   |
+   |               | scheduler's TK GUI              |
+   |---------------+---------------------------------|
+   |        timing | There is no global concept of   |
+   |               | simulation time in sid.         |
+   |               | Instead, each scheduler         |
+   |               | instance maintains its own      |
+   |               | notion of time.                 |
+   |               |                                 |
+   |               | A sid-sched-sim scheduler       |
+   |               | maintains a 64-bit integer as a |
+   |               | time counter. When advancing,   |
+   |               | this time counter is set to     |
+   |               | jump forward to the earliest of |
+   |               | the upcoming subscribed         |
+   |               | signals. This way, it           |
+   |               | represents the clock of a       |
+   |               | traditional event-driven        |
+   |               | simulator.                      |
+   |               |                                 |
+   |               | The sid-sched-host and          |
+   |               | sid-sched-host-accurate         |
+   |               | schedulers use a                |
+   |               | millisecond-precision timer of  |
+   |               | the host operating system. Its  |
+   |               | time is simply that of the      |
+   |               | operating system. When          |
+   |               | advancing, there may be no      |
+   |               | scheduled events due, even      |
+   |               | though there may be scheduled   |
+   |               | events. In such a case, if the  |
+   |               | yield-host-time? attribute is   |
+   |               | set to a value greater than or  |
+   |               | equal to                        |
+   |               | yield-host-time-threshold, a    |
+   |               | host-time scheduler will yield  |
+   |               | some amount of time to the host |
+   |               | operating system using a        |
+   |               | function like usleep().         |
+   |               |                                 |
+   |               | The time-query pin, when        |
+   |               | driven, causes a scheduler to   |
+   |               | signal its current 64-bit time  |
+   |               | back, in two 32-bit halves, on  |
+   |               | the time-high, then time-low    |
+   |               | pins. Similarly, the time       |
+   |               | attribute may be accessed to    |
+   |               | get/set the scheduler's time.   |
+   |---------------+---------------------------------|
+   |  subscription | The scheduler maintains a       |
+   |               | number of "subscriptions". Each |
+   |               | subscription represents a       |
+   |               | request to provide a series of  |
+   |               | recurring "regular" signals, or |
+   |               | a single-shot "irregular"       |
+   |               | signal, some time in the        |
+   |               | simulation's future. Each       |
+   |               | subscription has an associated  |
+   |               | set of pins and attributes to   |
+   |               | control it.                     |
+   |               |                                 |
+   |               | Each subscription is defined by |
+   |               | an index, a                     |
+   |               | regular-vs-irregular flag, a    |
+   |               | priority and a time quantity.   |
+   |               | The index is a number between 0 |
+   |               | and num-clients -1, and is      |
+   |               | represented as N in the         |
+   |               | pin/attribute list templates in |
+   |               | this document. The              |
+   |               | regular-vs-irregular flag is    |
+   |               | accessible as the N-regular?    |
+   |               | attribute. The priority is      |
+   |               | accessible as the N-priority    |
+   |               | attribute. Higher values        |
+   |               | indicate higher priority. The   |
+   |               | time quantity is accessible as  |
+   |               | the N-time attribute. If the    |
+   |               | value is zero, it is            |
+   |               | interpreted as a request to     |
+   |               | cancel all pending events for   |
+   |               | this subscription. Otherwise,   |
+   |               | the value is taken to be a      |
+   |               | delta until the time of the     |
+   |               | requested event.                |
+   |               |                                 |
+   |               | You can also set these controls |
+   |               | by driving encoded values into  |
+   |               | the N-control pin. The top bit  |
+   |               | is interpreted as the           |
+   |               | regular-vs-irregular flag (1:   |
+   |               | regular, 0:irregular), and the  |
+   |               | remaining bits as the delta     |
+   |               | time value. If the delta is     |
+   |               | zero, events for this           |
+   |               | subscription are cancelled.     |
+   |               |                                 |
+   |               | In each case, the time value    |
+   |               | sent is multiplied by a scale   |
+   |               | before being merged into the    |
+   |               | master schedule. The scaling    |
+   |               | value is available on the       |
+   |               | N-scale attribute, and may be   |
+   |               | specified as a plain number, or |
+   |               | as a fraction of two numbers    |
+   |               | (e.g., 1/5).                    |
+   |---------------+---------------------------------|
+   |     advancing | When you have disabled the      |
+   |               | scheduler by setting the        |
+   |               | enabled? attribute to a value   |
+   |               | less than the enable-threshold  |
+   |               | attribute, advancing as         |
+   |               | described below, does not       |
+   |               | occur.                          |
+   |               |                                 |
+   |               | Whenever the advance input pin  |
+   |               | is driven, the scheduler may    |
+   |               | dispatch one or more signals by |
+   |               | driving the N-event output pins |
+   |               | with some value. A counter      |
+   |               | accessed by the advance-count   |
+   |               | attribute is incremented. If    |
+   |               | the attribute enabled? has been |
+   |               | changed from a value below      |
+   |               | enable-threshold to a value     |
+   |               | greater than or equal to        |
+   |               | enable-threshold, then the pin  |
+   |               | active will be driven with the  |
+   |               | value 1. If the attribute       |
+   |               | enabled? has been changed from  |
+   |               | a value grater than or equal to |
+   |               | enable-threshold to a value     |
+   |               | less than enable-threshold,     |
+   |               | then the pin active will be     |
+   |               | driven with the value 0.        |
+   |               |                                 |
+   |               | Whether any particular N-event  |
+   |               | pin is driven depends on the    |
+   |               | subscription associated with    |
+   |               | that pin, and the passage of    |
+   |               | that scheduler's time. All      |
+   |               | events that are due "now", or   |
+   |               | that are overdue are            |
+   |               | dispatched.                     |
+   |               |                                 |
+   |               | If there are multiple due or    |
+   |               | overdue events, the scheduler   |
+   |               | may loop over the pending event |
+   |               | up to step-cycle-limit number   |
+   |               | of times, as an optimization.   |
+   |               | This loop may be aborted early  |
+   |               | if the yield input pin is       |
+   |               | driven.                         |
+   |               |                                 |
+   |               | If more than one event is       |
+   |               | scheduled at the same time.     |
+   |               | Events will be dispatched in    |
+   |               | priority order. Events with     |
+   |               | higher priority will be         |
+   |               | dispatched before events with   |
+   |               | lower priority.                 |
+   +-------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                 SID Conventions                 |
+   |-------------------------------------------------|
+   |        functional | supported  | -              |
+   |-------------------+------------+----------------|
+   |      save/restore | supported  | -              |
+   |-------------------+------------+----------------|
+   |     triggerpoints | not        | -              |
+   |                   | supported  |                |
+   |-------------------+------------+----------------|
+   | inhibit-recursion | supported  | It prevents    |
+   |                   |            | harmful        |
+   |                   |            | recursion on   |
+   |                   |            | the advance    |
+   |                   |            | input pin.     |
+   |-------------------+------------+----------------|
+   |          category | supported  | It presents    |
+   |                   |            | attributes in  |
+   |                   |            | the pin,       |
+   |                   |            | register and   |
+   |                   |            | setting        |
+   |                   |            | categories.    |
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components
+
+   Schedulers may be nested, though normally they are advanced via the top
+   level event source (sid-control-cfgroot).
+
+         new sid-sched-sim target-sched
+         new sid-sched-host host-sched
+         new SOME_KIND_OF_CPU cpu
+         set target-sched num-clients 1
+         connect-pin main perform-activity -> target-sched advance
+         connect-pin main perform-activity -> host-sched advance
+         connect-pin target-sched 0-event -> cpu step!
+         set target-sched 0-regular? 1
+         set target-sched 0-time 50
+
+
+   Performance
+
+   These schedulers use data structures and algorithms that attempt to be
+   efficient for large number of event subscriptions.
+
+   The sid-sched-host-accurate variety attempts to be accurate to 1 ms, but
+   this requires many more host OS system calls and therefore slows down the
+   simulation. The basic sid-sched-host type of scheduler attempt to be
+   accurate to only 25 ms. It does this by frequently estimating the host
+   time by adaptive extrapolation.
+
+   High level interface
+
+   See the <sidschedutil.h> header file for optional utility classes. These
+   use the low level interface below to manage a scheduler subscription, or
+   to get scheduler time.
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: sid-sched (Abstract)
+
+   +-----------------------------------------------------+
+   |                        pins                         |
+   |-----------------------------------------------------|
+   |   name   |direction|    legalvalues    | behaviors  |
+   |----------+---------+-------------------+------------|
+   |advance   |in       |any                |advancing   |
+   |----------+---------+-------------------+------------|
+   |yield     |in       |any                |advancing   |
+   |----------+---------+-------------------+------------|
+   |active    |out      |boolean            |advancing   |
+   |----------+---------+-------------------+------------|
+   |N-event   |out      |no value           |advancing   |
+   |----------+---------+-------------------+------------|
+   |N-control |in       |coded value        |subscription|
+   |----------+---------+-------------------+------------|
+   |time-query|in       |any                |timing      |
+   |----------+---------+-------------------+------------|
+   |time-high |out      |high order 32 bits |timing      |
+   |          |         |of 64-bit value    |            |
+   |----------+---------+-------------------+------------|
+   |time-low  |out      |low order 32 bits  |timing      |
+   |          |         |of 64-bit value    |            |
+   +-----------------------------------------------------+
+
++------------------------------------------------------------------------------+
+|                                  attributes                                  |
+|------------------------------------------------------------------------------|
+|           name            | category |  legal   |  default  |   behaviors   ||
+|                           |          |  values  |   value   |               ||
+|---------------------------+----------+----------+-----------+---------------||
+|state-snapshot             |no        |opaque    |-          |state          ||
+|                           |category  |string    |           |save/restore   ||
+|---------------------------+----------+----------+-----------+---------------||
+|num-clients                |setting   |numeric   |'0'        |configuration  ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-name                     |setting   |-         |-          |configuration  ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-regular?                 |setting   |boolean   |'0'        |subscription   ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-time                     |setting   |numeric   |'0'        |subscription   ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-priority                 |setting   |numeric   |'0'        |subscription   ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-scale                    |setting   |numeric   |'1'        |subscription   ||
+|                           |          |fraction  |           |               ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-event                    |pin       |-         |-          |advancing      ||
+|---------------------------+----------+----------+-----------+---------------||
+|N-control                  |pin       |-         |-          |subscription   ||
+|---------------------------+----------+----------+-----------+---------------||
+|advance                    |pin       |-         |-          |advancing      ||
+|---------------------------+----------+----------+-----------+---------------||
+|yield                      |pin       |-         |-          |advancing      ||
+|---------------------------+----------+----------+-----------+---------------||
+|enable-threshold           |setting   |numeric   |'1'        |advancing      ||
+|---------------------------+----------+----------+-----------+---------------||
+|enabled?                   |setting   |numeric   |'1'        |advancing      ||
+|---------------------------+----------+----------+-----------+---------------||
+|yield-host-time-threshold  |setting   |numeric   |'1'        |timing         ||
+|---------------------------+----------+----------+-----------+---------------||
+|yield-host-time?           |setting   |numeric   |'0'        |timing         ||
+|---------------------------+----------+----------+-----------+---------------||
+|step-cycle-limit           |setting   |numeric   |advancing  |               ||
+|---------------------------+----------+----------+-----------+---------------||
+|time                       |register  |numeric   |timing     |               ||
+|---------------------------+----------+----------+-----------+---------------||
+|advance-count              |register  |numeric   |advancing  |               ||
++------------------------------------------------------------------------------+
+
+  Variant: sid-sched-sim
+
+   Same as sid-sched
+
+  Variant: sid-sched-host
+
+   Same as sid-sched
+
+  Variant: sid-sched-host-accurate
+
+   Same as sid-sched

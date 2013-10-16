@@ -1,0 +1,137 @@
+            hw-glue-sequence (libglue.la :: glue_component_library)
+
+Synopsis:
+
+   This component family distributes pin signals from a source to a sequence
+   of sinks.
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+     * This component resembles a fan-out net in a circuit, or a very fast
+       shift register.
+     * The number of outputs is a matter of configuration. For the -1, -2,
+       and -8 family members, the num-outputs is initialized.
+
+   +-------------------------------------------------+
+   |                    Behaviors                    |
+   |-------------------------------------------------|
+   |   configuration | When the num-outputs is       |
+   |                 | written-to, this component    |
+   |                 | adjusts its list of output    |
+   |                 | pins, named output-0,         |
+   |                 | output-1, and so on. New ones |
+   |                 | may be generated or old ones  |
+   |                 | may disappear.                |
+   |-----------------+-------------------------------|
+   | data forwarding | Each input signal on the      |
+   |                 | input pin is forwarded to all |
+   |                 | external pins connected to    |
+   |                 | the output-0 pin, then        |
+   |                 | output-1, and so on, in       |
+   |                 | sequence, for all configured  |
+   |                 | outputs.                      |
+   +-------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                 SID Conventions                 |
+   |-------------------------------------------------|
+   |    functional | supported | This is a           |
+   |               |           | functional          |
+   |               |           | component.          |
+   |---------------+-----------+---------------------|
+   |         state | supported | This component      |
+   |  save/restore |           | supports state      |
+   |               |           | save/restore,       |
+   |               |           | though state is     |
+   |               |           | minimal (the number |
+   |               |           | of outputs).        |
+   |---------------+-----------+---------------------|
+   | triggerpoints | supported | This component      |
+   |               |           | supports            |
+   |               |           | triggerpoints by    |
+   |               |           | watching the input  |
+   |               |           | pin and the         |
+   |               |           | num-outputs         |
+   |               |           | attribute.          |
+   |---------------+-----------+---------------------|
+   |     Recursion | supported | This component      |
+   |       Control |           | limits recursion on |
+   |               |           | the input pin.      |
+   |---------------+-----------+---------------------|
+   |  presentation | supported | This component      |
+   |               |           | presents attributes |
+   |               |           | in the "pin",       |
+   |               |           | "setting", and      |
+   |               |           | "watchable"         |
+   |               |           | categories.         |
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components
+
+   This component may be used as an initialization sequencer in a scenario
+   with ordering dependencies. See this configuration fragment:
+
+         new hw-glue-sequence reset-manager
+         new SOME_KIND_OF_CPU cpu
+         new SOME_KIND_OF_LOADER loader
+         set reset-manager num-outputs 3
+         connect-pin reset-manager input <- main running
+         connect-pin reset-manager output-0 -> cpu reset
+         connect-pin reset-manager output-1 -> loader load!
+
+   It could be used as a central point to distribute a many-to-many broadcast
+   signal.
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: hw-glue-sequence (Abstract)
+
+   +---------------------------------------------------+
+   |                       pins                        |
+   |---------------------------------------------------|
+   |    name    | direction | legalvalues | behaviors  |
+   |------------+-----------+-------------+------------|
+   |input       |in         |any          |data        |
+   |            |           |             |forwarding  |
+   |------------+-----------+-------------+------------|
+   |output-NNN  |out        |any          |data        |
+   |            |           |             |forwarding  |
+   +---------------------------------------------------+
+
+   +------------------------------------------------------------------+
+   |                            attributes                            |
+   |------------------------------------------------------------------|
+   |     name     | category  | legal values |default|   behaviors   ||
+   |              |           |              | value |               ||
+   |--------------+-----------+--------------+-------+---------------||
+   |state-snapshot|no category|opaque string |-      |state          ||
+   |              |           |              |       |save/restore   ||
+   |--------------+-----------+--------------+-------+---------------||
+   |num-outputs   |setting,   |small positive|0      |configuration  ||
+   |              |watchable  |number        |       |               ||
+   |--------------+-----------+--------------+-------+---------------||
+   |input         |pin,       |-             |-      |data forwarding||
+   |              |watchable  |              |       |               ||
+   +------------------------------------------------------------------+
+
+  Variant: hw-glue-sequence-1
+
+   Same as hw-glue-sequence
+
+  Variant: hw-glue-sequence-2
+
+   Same as hw-glue-sequence
+
+  Variant: hw-glue-sequence-8
+
+   Same as hw-glue-sequence

@@ -1,0 +1,45 @@
+# Expect control file for DEJAGNU test system and ubicom32
+#
+
+# Needed for isnative.
+load_lib "framework.exp"
+
+# Turn off plum-hall testing
+#
+set PLUMHALL no
+set PLUMHALL_99b no
+
+# And Perennial too
+set PERENNIAL_C no
+set PERENNIAL_CLASSIC_C yes
+
+set UNDERSCORES yes
+
+if ![info exists tool] {
+    set run_multiple_targets 0;
+} elseif { $tool == "g++" || $tool == "gcc" || $tool == "gdb"} {
+    set run_multiple_targets 1;
+} else {
+    set run_multiple_targets 0;
+}
+
+verbose "Global Config FIle: target_triplet is $target_triplet" 2
+global target_list
+case "$target_triplet" in {
+    { "ubicom32-*" } {
+        set target_list "ubicom32-sid"
+    }
+
+    { "ip3k-*" } {
+        set target_list "ip3k-sid"
+    }
+
+    default {
+        set target_list { "unix" }
+    }
+}
+
+if { ! $run_multiple_targets } {
+    set target_list [lindex $target_list 0];
+}
+

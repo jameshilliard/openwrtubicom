@@ -1,0 +1,712 @@
+             hw-cpu-ubicom32 (libcgencpu.la :: cgen_component_library)
+
+Synopsis:
+
+   This component models the Ubicom UBICOM32 processor family.
+
+     ----------------------------------------------------------------------
+
+Functionality:
+
+  Modelling:
+
+   This component models a UBICOM32 processor.
+
+   It does not model the math coprocessor or the multifunction timers.
+
+   +-----------------------------------------------------+
+   |                      Behaviors                      |
+   |-----------------------------------------------------|
+   |  initialization|The CPU performs a power-on-reset   |
+   |                |style of operation when the reset!  |
+   |                |pin is driven.                      |
+   |                |                                    |
+   |                |Other mode settings may be          |
+   |                |controlled by pins and/or           |
+   |                |attributes: endian-set!/endian to   |
+   |                |set endianness, start-pc-set! to set|
+   |                |the PC. These are useful if the     |
+   |                |standard powerup state of the CPU   |
+   |                |needs to be changed for running a   |
+   |                |program that expects an initialized |
+   |                |environment.                        |
+   |----------------+------------------------------------|
+   |       execution|The component executes zero or more |
+   |                |instructions when the step! pin is  |
+   |                |driven. You can specify the maximum |
+   |                |number of instructions to be        |
+   |                |executed via the step-insn-count    |
+   |                |attribute. If the yield pin is      |
+   |                |driven in a reentrant fashion while |
+   |                |the instruction loop is active, the |
+   |                |loop will be exited at the next     |
+   |                |opportunity. At the end of the loop,|
+   |                |the step-cycles output pin is driven|
+   |                |with the number of instructions     |
+   |                |actually executed, though this value|
+   |                |is clamped to be at least 1. The    |
+   |                |insn-count attribute accumulates the|
+   |                |total number of instructions        |
+   |                |executed since reset.               |
+   |                |                                    |
+   |                |Each instruction is first fetched   |
+   |                |from memory via the insn-memory     |
+   |                |accessor, and its decoding traced if|
+   |                |the trace-extract? attribute is set |
+   |                |to a true value. The decoded form   |
+   |                |may be cached indefinitely          |
+   |                |afterwards, although this cache is  |
+   |                |flushed when the flush-icache pin is|
+   |                |driven.                             |
+   |                |                                    |
+   |                |The engine-type attribute specifies |
+   |                |whether the "scache" ("semantic     |
+   |                |cache") or "pbb" ("pseudo basic     |
+   |                |block") dispatching mechanism is    |
+   |                |used during execution. The "scache" |
+   |                |mode executes each instruction in   |
+   |                |isolation and checks all            |
+   |                |triggerpoints after each. If the    |
+   |                |enable-step-trap? attribute is set, |
+   |                |after each instruction, a           |
+   |                |single-stepping trap is signalled as|
+   |                |described in the exceptions/traps   |
+   |                |behavior below.                     |
+   |                |                                    |
+   |                |The "pbb" mode executes a series of |
+   |                |sequential instructions in one      |
+   |                |uninterruptible sequence, and is    |
+   |                |thus faster. However, it cannot     |
+   |                |handle triggerpoints or             |
+   |                |single-stepping, nor can it respond |
+   |                |to icache flushing as quickly. The  |
+   |                |"pbb" mode is temporarily and       |
+   |                |transparently downgraded to the     |
+   |                |"scache" mode when needed.          |
+   |                |                                    |
+   |                |During the execution of an          |
+   |                |instruction, this component may make|
+   |                |accesses using the data-memory      |
+   |                |accessor, may update its simulated  |
+   |                |registers, and may trigger an       |
+   |                |exception/trap.                     |
+   |----------------+------------------------------------|
+   |exceptions/traps|When encountering exception/trap    |
+   |                |conditions such as memory access    |
+   |                |errors or software interrupts, this |
+   |                |component signals the event using   |
+   |                |the trap pin. (For some traps, the  |
+   |                |trap-code pin is driven with extra  |
+   |                |information just beforehand.) An    |
+   |                |external component may interpret the|
+   |                |values in the table below, and      |
+   |                |declare a disposition for the       |
+   |                |condition. In the absence of input, |
+   |                |the condition will be treated as the|
+   |                |hardware would, that is by          |
+   |                |dispatching to exception vectors,   |
+   |                |switching processor modes, etc.     |
+   |                |                                    |
+   |                |The trap codes sent on the trap     |
+   |                |output pin are:                     |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                || trap | cause       | trap-code   ||
+   |                ||------+-------------+-------------||
+   |                || 1    | software    | instruction ||
+   |                ||      | trap        | bitmap      ||
+   |                ||------+-------------+-------------||
+   |                || 2    | breakpoint  | bkpt number ||
+   |                ||------+-------------+-------------||
+   |                || 3    | system call | syscall     ||
+   |                ||      |             | number      ||
+   |                ||------+-------------+-------------||
+   |                || 4    | invalid     | n/a         ||
+   |                ||      | instruction |             ||
+   |                ||------+-------------+-------------||
+   |                || 5    | memory      | faulting    ||
+   |                ||      | fault       | address     ||
+   |                ||------+-------------+-------------||
+   |                || 6    | arithmetic  | faulting    ||
+   |                ||      | overflow    | address     ||
+   |                ||------+-------------+-------------||
+   |                || 7    | stepped     | n/a         ||
+   |                |+----------------------------------+|
+   |                |                                    |
+   |                |The disposition codes returned on   |
+   |                |the trap input pin are:             |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                || trap     | effect                ||
+   |                ||----------+-----------------------||
+   |                || 0 or n/a | dispatch as hardware  ||
+   |                ||          | would                 ||
+   |                ||----------+-----------------------||
+   |                || 1        | handled; continue     ||
+   |                ||----------+-----------------------||
+   |                || 2        | reissue               ||
+   |                ||----------+-----------------------||
+   |                ||          | handled; skip         ||
+   |                || 3        | instruction and       ||
+   |                ||          | continue              ||
+   |                |+----------------------------------+|
+   |----------------+------------------------------------|
+   |       interrupt|Various hardware interrupt sources  |
+   |                |are allowed. Each of these          |
+   |                |corresponds to an input pin for the |
+   |                |cpu. When driven, the pin will set  |
+   |                |the corresponding bit in the        |
+   |                |interrupt_status[0] register. An    |
+   |                |interrupt will occur in a context if|
+   |                |the corresponding bit is set on in  |
+   |                |the interrupt_mask[0] for the       |
+   |                |context and the Global Control      |
+   |                |register has the interrupt enable   |
+   |                |bit (bit 0) set to 1.               |
+   |                |                                    |
+   |                |The following lists the external    |
+   |                |interrupt pins:                     |
+   |                |                                    |
+   |                |  * irq_0                           |
+   |                |  * irq_1                           |
+   |                |  * irq_2                           |
+   |                |  * irq_3                           |
+   |                |  * irq_4                           |
+   |                |  * irq_5                           |
+   |                |  * irq_6                           |
+   |                |  * irq_7                           |
+   |                |  * irq_8                           |
+   |                |  * irq_9                           |
+   |                |  * irq_10                          |
+   |                |  * irq_11                          |
+   |                |  * irq_12                          |
+   |                |  * irq_13                          |
+   |                |  * irq_14                          |
+   |                |  * irq_15                          |
+   |                |  * irq_16                          |
+   |                |  * irq_17                          |
+   |                |  * irq_18                          |
+   |                |  * irq_19                          |
+   |                |  * irq_20                          |
+   |                |  * irq_21                          |
+   |                |  * irq_22                          |
+   |                |  * irq_23                          |
+   |                |  * irq_24                          |
+   |                |  * irq_25                          |
+   |                |  * irq_26                          |
+   |                |  * irq_27                          |
+   |                |  * irq_28                          |
+   |                |  * irq_29                          |
+   |                |  * irq_30                          |
+   |                |  * irq_31                          |
+   |                |  * irq_math_coprocessor_completion |
+   |                |  * irq_math_coprocessor_exception  |
+   |----------------+------------------------------------|
+   |         syscall|Syscalls are supported via the int.s|
+   |                |instruction with a value specified  |
+   |                |by the syscall-trap attribute       |
+   |                |(default 63). Syscall implementation|
+   |                |is handled by the gloss component.  |
+   |                |Parameters and return values are    |
+   |                |handled by the following register   |
+   |                |attributes:                         |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                ||                | first argument  ||
+   |                || syscall-arg0   | of syscall      ||
+   |                ||                | (syscall        ||
+   |                ||                | number)         ||
+   |                ||----------------+-----------------||
+   |                || syscall-arg1   | second argument ||
+   |                ||                | of syscall      ||
+   |                ||----------------+-----------------||
+   |                || syscall-arg2   | third argument  ||
+   |                ||                | of syscall      ||
+   |                ||----------------+-----------------||
+   |                || syscall-arg3   | fourth argument ||
+   |                ||                | of syscall      ||
+   |                ||----------------+-----------------||
+   |                || syscall-error  | errno code      ||
+   |                ||----------------+-----------------||
+   |                || syscall-result | return code     ||
+   |                ||----------------+-----------------||
+   |                || syscall-trap   | trap number of  ||
+   |                ||                | syscall         ||
+   |                |+----------------------------------+|
+   |----------------+------------------------------------|
+   |           timer|There are a number of pins provided |
+   |                |to support external timers.         |
+   |                |                                    |
+   |                |The watchdog_enable pin is used as  |
+   |                |an output pin to enable/disable a   |
+   |                |watchdog timer. The pin is driven   |
+   |                |whenever the watchdog enable bit    |
+   |                |(bit 3) of the Global Control       |
+   |                |register changes in value. The      |
+   |                |driven value is 0 or 1, depending on|
+   |                |the global enable bit setting.      |
+   |                |                                    |
+   |                |The watchdog_trigger pin is used as |
+   |                |input to denote when a Watchdog     |
+   |                |timer has expired/wrapped. The cpu  |
+   |                |will then verify that the watchdog  |
+   |                |enable bit (bit 3) in the Global    |
+   |                |Control register is set. If it is, a|
+   |                |global watchdog reset will be issued|
+   |                |by driving the watchdog_reset pin.  |
+   |                |                                    |
+   |                |The timer_enable pin is used as an  |
+   |                |output pin to enable/disable the    |
+   |                |four multi-function timers: timer1, |
+   |                |timer2, timer3, and timer4. The pin |
+   |                |is driven whenever the timer enable |
+   |                |bit (bit 1) of the Global Control   |
+   |                |register changes. It is either      |
+   |                |driven with 0 or 1, depending on the|
+   |                |value of the global enable bit.     |
+   |                |                                    |
+   |                |The tctrl register is tied to each  |
+   |                |timer via two output pins that      |
+   |                |represent the specific timer reset  |
+   |                |and interrupt enable. The following |
+   |                |lists the pins and which tctrl bit  |
+   |                |they are tied to:                   |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                ||             | bit | timer 1      ||
+   |                || tctrl_t1rst | 0   | counter      ||
+   |                ||             |     | reset        ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 2      ||
+   |                || tctrl_t2rst | 1   | counter      ||
+   |                ||             |     | reset        ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 3      ||
+   |                || tctrl_t3rst | 2   | counter      ||
+   |                ||             |     | reset        ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 4      ||
+   |                || tctrl_t4rst | 3   | counter      ||
+   |                ||             |     | reset        ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 1      ||
+   |                || tctrl_t1ie  | 4   | interrupt    ||
+   |                ||             |     | enable       ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 2      ||
+   |                || tctrl_t2ie  | 5   | interrupt    ||
+   |                ||             |     | enable       ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 3      ||
+   |                || tctrl_t3ie  | 6   | interrupt    ||
+   |                ||             |     | enable       ||
+   |                ||-------------+-----+--------------||
+   |                ||             | bit | timer 4      ||
+   |                || tctrl_t4ie  | 7   | inetrrupt    ||
+   |                ||             |     | enable       ||
+   |                |+----------------------------------+|
+   |                |                                    |
+   |                |The txrst pins are only driven with |
+   |                |a 1 if the corresponding bit is set |
+   |                |in the tctrl register. The txie bits|
+   |                |are driven when the value changes   |
+   |                |and are driven with the new value.  |
+   |----------------+------------------------------------|
+   | register access|All direct memory address registers |
+   |                |are accessible via attributes. In   |
+   |                |the case of context-specific        |
+   |                |registers, the name is prefixed with|
+   |                |"cx:" where x is the context number |
+   |                |(e.g. c0:d1). The following table   |
+   |                |lists the context-prefixed attribute|
+   |                |names and the registers they        |
+   |                |represent:                          |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                || d0 to d31   | 32 data registers  ||
+   |                ||-------------+--------------------||
+   |                || a0 to a7    | 8 address          ||
+   |                ||             | registers          ||
+   |                ||-------------+--------------------||
+   |                || mac_hi      | high accumulator   ||
+   |                ||-------------+--------------------||
+   |                || mac_lo      | low accumulator    ||
+   |                ||-------------+--------------------||
+   |                || mac_rc16    | mac in s15 format  ||
+   |                ||-------------+--------------------||
+   |                || source3     | source 3 register  ||
+   |                ||-------------+--------------------||
+   |                || insn_cnt    | instruction count  ||
+   |                ||-------------+--------------------||
+   |                || csr         | context status     ||
+   |                ||             | register           ||
+   |                ||-------------+--------------------||
+   |                || rosr        | read-only status   ||
+   |                ||             | register           ||
+   |                ||-------------+--------------------||
+   |                || iread_data  | iread register     ||
+   |                ||-------------+--------------------||
+   |                || int_mask0   | interrupt mask[0]  ||
+   |                ||             | register           ||
+   |                ||-------------+--------------------||
+   |                || int_mask1   | interrupt mask[1]  ||
+   |                ||             | register           ||
+   |                ||-------------+--------------------||
+   |                || pc          | context specific   ||
+   |                ||             | pc                 ||
+   |                |+----------------------------------+|
+   |                |                                    |
+   |                |In addition to the context-specific |
+   |                |registers, the following global     |
+   |                |register attributes exist:          |
+   |                |                                    |
+   |                |+----------------------------------+|
+   |                || global_ctrl  | global control    ||
+   |                ||              | register          ||
+   |                ||--------------+-------------------||
+   |                ||              | interrupt         ||
+   |                || int_stat0    | status[0]         ||
+   |                ||              | register          ||
+   |                ||--------------+-------------------||
+   |                ||              | interrupt         ||
+   |                || int_stat1    | status[1]         ||
+   |                ||              | register          ||
+   |                ||--------------+-------------------||
+   |                || mt_en        | multithreading    ||
+   |                ||              | enable register   ||
+   |                ||--------------+-------------------||
+   |                || mt_pri       | multithreading    ||
+   |                ||              | priority register ||
+   |                ||--------------+-------------------||
+   |                ||              | multithreading    ||
+   |                || mt_sched     | scheduling        ||
+   |                ||              | register          ||
+   |                ||--------------+-------------------||
+   |                || tctrl        | tctrl register    ||
+   |                ||--------------+-------------------||
+   |                || global_timer | global timer      ||
+   |                |+----------------------------------+|
+   |                |                                    |
+   |                |To handle communication with the    |
+   |                |gloss component the syscall-x       |
+   |                |register attributes are used. See   |
+   |                |the syscall section above.          |
+   |                |                                    |
+   |                |The pc attribute is also available. |
+   |                |The current endianness is available |
+   |                |as attribute endian.                |
+   |                |                                    |
+   |                |This component exports a number of  |
+   |                |attributes for use by the           |
+   |                |sw-debug-gdb component. These are   |
+   |                |the gdb-* attributes, in the        |
+   |                |"debugger" category. The            |
+   |                |gdb-register-N group access all     |
+   |                |registers in gdb's indexing scheme, |
+   |                |in raw target byte order. The       |
+   |                |gdb-register-pc is a special        |
+   |                |watchable value with no associated  |
+   |                |attribute. The gdb-num-registers    |
+   |                |attribute provides the limit for N. |
+   |                |The gdb-exp-registers attribute     |
+   |                |provides a semicolon-separated list |
+   |                |of "expedited" register numbers.    |
+   |                |                                    |
+   |                |The debugger-bus bus provides access|
+   |                |to the target program's address     |
+   |                |space, and is used by gdb to access |
+   |                |target memory.                      |
+   +-----------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                 SID Conventions                 |
+   |-------------------------------------------------|
+   |        functional | supported | -               |
+   |-------------------+-----------+-----------------|
+   |      save/restore | supported | -               |
+   |-------------------+-----------+-----------------|
+   |     triggerpoints | supported | Triggerpoints   |
+   |                   |           | are supported   |
+   |                   |           | for CPU         |
+   |                   |           | registers.      |
+   |-------------------+-----------+-----------------|
+   | inhibit-recursion | supported | It prevents     |
+   |                   |           | harmful         |
+   |                   |           | recursion from  |
+   |                   |           | the step! input |
+   |                   |           | pin.            |
+   +-------------------------------------------------+
+
+     ----------------------------------------------------------------------
+
+Environment:
+
+   Related components:
+
+   CPUs connect to many components: memory to store data and instructions, a
+   scheduler to provide step! signals, software trap emulators, debugger
+   interfaces. The step-cycles output pin may be used as a N-event-control
+   input for a target scheduler to track an estimate of consumed target time.
+
+   Host system:
+
+   Some error conditions are signalled by messages to standard error. These
+   include some illegal CPU states caused by the simulated program.
+
+     ----------------------------------------------------------------------
+
+Component Reference:
+
+  Component: hw-cpu-ubicom32
+
+ +-----------------------------------------------------------------------------+
+ |                                    pins                                     |
+ |-----------------------------------------------------------------------------|
+ |             name              |direction|   legalvalues    |   behaviors    |
+ |-------------------------------+---------+------------------+----------------|
+ |endian-set!                    |in       |1 (big) / 2       |initialization  |
+ |                               |         |(little)          |                |
+ |-------------------------------+---------+------------------+----------------|
+ |start-pc-set!                  |in       |any value         |initialization  |
+ |-------------------------------+---------+------------------+----------------|
+ |reset!                         |in       |0 or 1            |initialization  |
+ |-------------------------------+---------+------------------+----------------|
+ |trap                           |inout    |enum values       |exceptions/traps|
+ |-------------------------------+---------+------------------+----------------|
+ |trap-code                      |out      |various values    |exceptions/traps|
+ |-------------------------------+---------+------------------+----------------|
+ |step-cycles                    |out      |1..step-insn-count|execution       |
+ |-------------------------------+---------+------------------+----------------|
+ |step!                          |in       |any value         |execution       |
+ |-------------------------------+---------+------------------+----------------|
+ |yield                          |in       |any               |execution       |
+ |-------------------------------+---------+------------------+----------------|
+ |flush-icache                   |in       |any               |execution       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_0                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_1                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_2                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_3                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_4                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_5                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_6                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_7                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_8                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_9                          |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_10                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_11                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_12                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_13                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_14                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_15                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_16                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_17                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_18                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_19                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_20                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_21                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_22                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_23                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_24                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_25                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_26                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_27                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_28                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_29                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_30                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_31                         |in       |any value         |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_math_coprocessor_completion|in       |0 / non-zero      |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |irq_math_coprocessor_exception |in       |0 / non-zero      |interrupt       |
+ |-------------------------------+---------+------------------+----------------|
+ |watchdog_trigger               |in       |any value         |timer           |
+ |-------------------------------+---------+------------------+----------------|
+ |watchdog_reset                 |out      |0 / non-zero      |timer           |
+ |-------------------------------+---------+------------------+----------------|
+ |timer_enable                   |out      |0 / non-zero      |timer           |
+ +-----------------------------------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                      buses                      |
+   |-------------------------------------------------|
+   |     name     | addresses | accesses | behaviors |
+   |--------------+-----------+----------+-----------|
+   | debugger-bus | any       | any      | debugger  |
+   |              |           |          | access    |
+   |--------------+-----------+----------+-----------|
+   | data-bus     | any       | any      | data      |
+   |              |           |          | access    |
+   +-------------------------------------------------+
+
+   +---------------------------------------------------------------------------+
+   |                                attributes                                 |
+   |---------------------------------------------------------------------------|
+   |      name       |category |     legal values     |default|   behaviors   ||
+   |                 |         |                      | value |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |endian           |register |'1'/'big'/'2'/'little'|big    |initialization,||
+   |                 |         |                      |       |register access||
+   |-----------------+---------+----------------------+-------+---------------||
+   |trace-extract?   |setting  |boolean               |false  |initialization ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |trace-result?    |setting  |boolean               |false  |initialization ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |engine-type      |setting  |scache or pbb         |pbb    |execution      ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |insn-count       |watchable|number                |-      |execution      ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |step-insn-count  |setting  |number                |1      |execution      ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |enable-step-trap?|setting  |boolean               |false  |execution      ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |rN               |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |pc               |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |gdb-register-N   |debugger |byte array            |-      |register access||
+   |-----------------+---------+----------------------+-------+---------------||
+   |gdb-num-registers|debugger |number                |-      |register access||
+   |-----------------+---------+----------------------+-------+---------------||
+   |gdb-exp-registers|debugger |number list           |-      |register access||
+   |-----------------+---------+----------------------+-------+---------------||
+   |state-snapshot   |-        |opaque string         |-      |state          ||
+   |                 |         |                      |       |save/restore   ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |step-cycles      |watchable|number                |-      |execution      ||
+   |                 |pin      |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |trap             |watchable|number                |-      |execution/traps||
+   |                 |pin      |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |trap-code        |watchable|number                |-      |execution/traps||
+   |                 |pin      |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:dN            |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:aM            |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:mac_hi        |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:mac_lo        |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:mac_rc16      |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:source3       |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:insn_cnt      |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:csr           |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:rosr          |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:iread_data    |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:int_mask0     |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:int_mask1     |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |cX:pc            |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |int_stat0        |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |int_stat1        |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |global_ctrl      |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |global_timer     |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |tctrl            |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |mt_en            |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |mt_pri           |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |mt_sched         |watchable|number                |-      |register access||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-arg0     |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-arg1     |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-arg2     |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-arg3     |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-error    |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-result   |watchable|number                |-      |syscall        ||
+   |                 |register |                      |       |               ||
+   |-----------------+---------+----------------------+-------+---------------||
+   |syscall-trap     |setting  |number                |63     |syscall        ||
+   +---------------------------------------------------------------------------+
+
+   +-------------------------------------------------+
+   |                    accessors                    |
+   |-------------------------------------------------|
+   |    name     |       accesses        | behaviors |
+   |-------------+-----------------------+-----------|
+   | data-memory | any                   | execution |
+   |-------------+-----------------------+-----------|
+   | insn-memory | typically 4-byte      | execution |
+   |             | accesses              |           |
+   +-------------------------------------------------+
