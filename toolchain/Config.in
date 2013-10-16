@@ -26,6 +26,7 @@ menuconfig EXTERNAL_TOOLCHAIN
 		default "mipsel-unknown-linux-gnu"   if mipsel
 		default "powerpc-unknown-linux-gnu"  if powerpc
 		default "x86_64-unknown-linux-gnu"   if x86_64
+		default "ubicom32-unknown-linux-gnu" if ubicom32
 
 	config TOOLCHAIN_PREFIX
 		string
@@ -38,6 +39,7 @@ menuconfig EXTERNAL_TOOLCHAIN
 		default "mipsel-unknown-linux-gnu-"   if mipsel
 		default "powerpc-unknown-linux-gnu-"  if powerpc
 		default "x86_64-unknown-linux-gnu-"   if x86_64
+		default "ubicom32-linux-uclibc-"      if ubicom32
 
 	config TOOLCHAIN_ROOT
 		string
@@ -50,6 +52,7 @@ menuconfig EXTERNAL_TOOLCHAIN
 		default "/opt/cross/mipsel-unknown-linux-gnu"   if mipsel
 		default "/opt/cross/powerpc-unknown-linux-gnu"  if powerpc
 		default "/opt/cross/x86_64-unknown-linux-gnu"   if x86_64
+		default "$(TOPDIR)/../toolchain/"               if ubicom32
 
 	config TOOLCHAIN_BIN_PATH
 		string
@@ -77,6 +80,16 @@ menuconfig EXTERNAL_TOOLCHAIN
 		help
 		  Specify additional directories searched for libraries (override LDFLAGS)
 		  Use ./DIR for directories relative to the root above
+
+config COMPILE_CLIBRARY_WITH_EXTERNAL_TOOLCHAIN
+	bool
+	prompt "Compile C library from source with external toolchain"
+	depends DEVEL && !NATIVE_TOOLCHAIN && !NEED_TOOLCHAIN &&
+
+TARGET_ubicom32
+	select TOOLCHAINOPTS
+	default y if ubicom32
+	default n
 
 config NEED_TOOLCHAIN
 	bool
@@ -150,6 +163,12 @@ endchoice
 
 source "toolchain/eglibc/Config.in"
 source "toolchain/uClibc/Config.in"
+
+config EXTERNAL_LIBC_TREE
+	string "External uClibc Path"
+	depends TOOLCHAINOPTS && COMPILE_CLIBRARY_WITH_EXTERNAL_TOOLCHAIN
+	default "$(TOPDIR)/../uClibc/" if TARGET_ubicom32
+	default ""
 
 comment "Debuggers"
 	depends TOOLCHAINOPTS
