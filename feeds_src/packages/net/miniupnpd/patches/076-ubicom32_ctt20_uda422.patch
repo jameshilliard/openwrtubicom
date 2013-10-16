@@ -1,0 +1,21 @@
+diff -Naur miniupnpd-bsp32.a/upnpdescgen.c miniupnpd-bsp32.b/upnpdescgen.c
+--- miniupnpd-bsp32.a/upnpdescgen.c	2011-06-28 16:12:46.554924915 +0300
++++ miniupnpd-bsp32.b/upnpdescgen.c	2011-06-28 16:41:16.230924970 +0300
+@@ -729,7 +729,7 @@
+ 	str = strcat_str(str, len, &tmplen, "\">");
+ 	while(v->name) {
+ 		if(v->itype & 0x80) {
+-			str = strcat_str(str, len, &tmplen, "<e:property><s:");
++			str = strcat_str(str, len, &tmplen, "<e:property><");
+ 			str = strcat_str(str, len, &tmplen, v->name);
+ 			str = strcat_str(str, len, &tmplen, ">");
+ 			//printf("<e:property><s:%s>", v->name);
+@@ -774,7 +774,7 @@
+ 				str = strcat_str(str, len, &tmplen, upnpallowedvalues[v->ieventvalue]);
+ 				//printf("%s", upnpallowedvalues[v->ieventvalue]);
+ 			}
+-			str = strcat_str(str, len, &tmplen, "</s:");
++			str = strcat_str(str, len, &tmplen, "</");
+ 			str = strcat_str(str, len, &tmplen, v->name);
+ 			str = strcat_str(str, len, &tmplen, "></e:property>");
+ 			//printf("</s:%s></e:property>\n", v->name);

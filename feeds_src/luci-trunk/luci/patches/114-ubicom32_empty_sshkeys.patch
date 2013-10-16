@@ -1,0 +1,12 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/sshkeys.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/sshkeys.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/sshkeys.lua	2009-10-31 17:54:11.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/sshkeys.lua	2011-02-14 11:34:25.000000000 +0200
+@@ -27,6 +27,8 @@
+ 	if state == FORM_VALID then
+ 		if data.keys then
+ 			nixio.fs.writefile(keyfile, data.keys:gsub("\r\n", "\n"))
++		else
++			nixio.fs.unlink(keyfile)
+ 		end
+ 	end
+ 	return true

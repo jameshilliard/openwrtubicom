@@ -1,0 +1,25 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-16 11:52:24.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-16 14:27:19.000000000 +0200
+@@ -288,4 +288,21 @@
+ 
+ s:option(DummyValue, "target", translate("Action"))
+ 
++
++--
++-- Urlfilter
++--
++
++s = m:section(TypedSection, "urlfilter", translate("URL Filter"))
++s.anonymous = true
++
++fp = s:option(ListValue, "policy", translate("Select policy to be applied"))
++fp:value("DISABLE", translate("Do not enable URL filter"))
++fp:value("DROP", translate("Allow all, except below list"))
++fp:value("ACCEPT", translate("Block all, except below list"))
++
++ul = s:option(DynamicList, "url", translate("URL List"))
++ul:depends("policy", "DROP")  
++ul:depends("policy", "ACCEPT")
++
+ return m

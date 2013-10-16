@@ -1,0 +1,522 @@
+diff -Naur miniupnpd-bsp32.a/upnpsoap.c miniupnpd-bsp32.b/upnpsoap.c
+--- miniupnpd-bsp32.a/upnpsoap.c	2011-06-14 13:14:41.734792610 +0300
++++ miniupnpd-bsp32.b/upnpsoap.c	2011-06-28 14:24:56.370924811 +0300
+@@ -27,6 +27,8 @@
+ 
+ #include "upnpevents.h"
+ 
++#define VERBOSE_PAR_NUM 3
++
+ static void
+ BuildSendAndCloseSoapResp(struct upnphttp * h,
+                           const char * body, int bodylen)
+@@ -66,7 +68,29 @@
+ 		"<NewConnectionType>IP_Routed</NewConnectionType>\n"
+ 		"<NewPossibleConnectionTypes>IP_Routed</NewPossibleConnectionTypes>\n"
+ 		"</u:GetConnectionTypeInfoResponse>";
+-	BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
++	struct NameValueParserData data;
++	int par_num;
++
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetConnectionTypeInfo" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -80,15 +104,36 @@
+ 		"<NewTotalBytesSent>%lu</NewTotalBytesSent>"
+ 		"</u:%sResponse>";
+ 
++	struct NameValueParserData data;
++	int par_num;
+ 	char body[512];
+ 	int bodylen;
+-	struct ifdata data;
++	struct ifdata if_data;
+ 
+-	r = getifstats(ext_if_name, &data);
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
+-             r<0?0:data.obytes, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetTotalBytesSent" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		r = getifstats(ext_if_name, &if_data);
++		bodylen = snprintf(body, sizeof(body), resp,
++		         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
++	             r<0?0:if_data.obytes, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -102,15 +147,36 @@
+ 		"<NewTotalBytesReceived>%lu</NewTotalBytesReceived>"
+ 		"</u:%sResponse>";
+ 
++	struct NameValueParserData data;
++	int par_num;
+ 	char body[512];
+ 	int bodylen;
+-	struct ifdata data;
++	struct ifdata if_data;
+ 
+-	r = getifstats(ext_if_name, &data);
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
+-	         r<0?0:data.ibytes, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetTotalBytesReceived" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		r = getifstats(ext_if_name, &if_data);
++		bodylen = snprintf(body, sizeof(body), resp,
++		         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
++		         r<0?0:if_data.ibytes, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -124,15 +190,35 @@
+ 		"<NewTotalPacketsSent>%lu</NewTotalPacketsSent>"
+ 		"</u:%sResponse>";
+ 
++	struct NameValueParserData data;
++	int par_num;
+ 	char body[512];
+ 	int bodylen;
+-	struct ifdata data;
++	struct ifdata if_data;
+ 
+-	r = getifstats(ext_if_name, &data);
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
+-	         r<0?0:data.opackets, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetTotalPacketsSent" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 */
++		r = getifstats(ext_if_name, &if_data);
++		bodylen = snprintf(body, sizeof(body), resp,
++		         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
++		         r<0?0:if_data.opackets, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -146,15 +232,36 @@
+ 		"<NewTotalPacketsReceived>%lu</NewTotalPacketsReceived>"
+ 		"</u:%sResponse>";
+ 
++	struct NameValueParserData data;
++	int par_num;
+ 	char body[512];
+ 	int bodylen;
+-	struct ifdata data;
++	struct ifdata if_data;
+ 
+-	r = getifstats(ext_if_name, &data);
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
+-	         r<0?0:data.ipackets, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetTotalPacketsReceived" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		r = getifstats(ext_if_name, &if_data);
++		bodylen = snprintf(body, sizeof(body), resp,
++		         action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
++		         r<0?0:if_data.ipackets, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -165,36 +272,56 @@
+ 	static const char resp[] =
+ 		"<u:%sResponse "
+ 		"xmlns:u=\"%s\">"
+-		/*"<NewWANAccessType>DSL</NewWANAccessType>"*/
+-		"<NewWANAccessType>Cable</NewWANAccessType>\n"
++		"<NewWANAccessType>Ethernet</NewWANAccessType>\n"
+ 		"<NewLayer1UpstreamMaxBitRate>%lu</NewLayer1UpstreamMaxBitRate>\n"
+ 		"<NewLayer1DownstreamMaxBitRate>%lu</NewLayer1DownstreamMaxBitRate>\n"
+ 		"<NewPhysicalLinkStatus>%s</NewPhysicalLinkStatus>\n"
+ 		"</u:%sResponse>";
+ 
++	struct NameValueParserData data;
++	int par_num;
+ 	char body[2048];
+ 	int bodylen;
+-	struct ifdata data;
++	struct ifdata if_data;
+ 	const char * status = "Up";	/* Up, Down (Required),
+ 	                             * Initializing, Unavailable (Optional) */
+ 	char ext_ip_addr[INET_ADDRSTRLEN];
+ 
+-	if((downstream_bitrate == 0) || (upstream_bitrate == 0))
+-	{
+-		if(getifstats(ext_if_name, &data) >= 0)
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetCommonLinkProperties" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		if((downstream_bitrate == 0) || (upstream_bitrate == 0))
+ 		{
+-			if(downstream_bitrate == 0) downstream_bitrate = data.baudrate;
+-			if(upstream_bitrate == 0) upstream_bitrate = data.baudrate;
++			if(getifstats(ext_if_name, &if_data) >= 0)
++			{
++				if(downstream_bitrate == 0) downstream_bitrate = if_data.baudrate;
++				if(upstream_bitrate == 0) upstream_bitrate = if_data.baudrate;
++			}
+ 		}
++		if(getifaddr(ext_if_name, ext_ip_addr, INET_ADDRSTRLEN) < 0) {
++			status = "Down";
++		}
++		bodylen = snprintf(body, sizeof(body), resp,
++		    action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
++			upstream_bitrate, downstream_bitrate,
++		    status, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
+ 	}
+-	if(getifaddr(ext_if_name, ext_ip_addr, INET_ADDRSTRLEN) < 0) {
+-		status = "Down";
+-	}
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	    action, "urn:schemas-upnp-org:service:WANCommonInterfaceConfig:1",
+-		upstream_bitrate, downstream_bitrate,
+-	    status, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -216,15 +343,36 @@
+ 	 * Unconfigured, Connecting, Connected, PendingDisconnect,
+ 	 * Disconnecting, Disconnected */
+ 	char ext_ip_addr[INET_ADDRSTRLEN];
++	struct NameValueParserData data;
++	int par_num;
+ 
+-	if(getifaddr(ext_if_name, ext_ip_addr, INET_ADDRSTRLEN) < 0) {
+-		status = "Disconnected";
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetStatusInfo" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		if(getifaddr(ext_if_name, ext_ip_addr, INET_ADDRSTRLEN) < 0) {
++			status = "Disconnected";
++		}
++		uptime = (time(NULL) - startup_time);
++		bodylen = snprintf(body, sizeof(body), resp,
++			action, "urn:schemas-upnp-org:service:WANIPConnection:1",
++			status, (long)uptime, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
+ 	}
+-	uptime = (time(NULL) - startup_time);
+-	bodylen = snprintf(body, sizeof(body), resp,
+-		action, "urn:schemas-upnp-org:service:WANIPConnection:1",
+-		status, (long)uptime, action);	
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -244,7 +392,29 @@
+ 	 * applications that otherwise break if NAT is introduced
+ 	 * (e.g. IPsec-based VPNs).
+ 	 * A gateway that does not support RSIP should set this variable to 0. */
+-	BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
++	struct NameValueParserData data;
++	int par_num;
++
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetNATRSIPStatus" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
++		BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -259,7 +429,25 @@
+ 	char body[512];
+ 	int bodylen;
+ 	char ext_ip_addr[INET_ADDRSTRLEN];
++	struct NameValueParserData data;
++	int par_num;
++
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
+ 
++	/*
++	 * Action "GetExternalIPAddress" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * ...
++		 */
+ #ifndef MULTIPLE_EXTERNAL_IP
+ 	if(use_ext_ip_addr)
+ 	{
+@@ -288,6 +476,9 @@
+ 	              action, "urn:schemas-upnp-org:service:WANIPConnection:1",
+ 				  ext_ip_addr, action);
+ 	BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ 
+ static void
+@@ -826,15 +1017,36 @@
+ 		"<u:SetDefaultConnectionServiceResponse "
+ 		"xmlns:u=\"urn:schemas-upnp-org:service:Layer3Forwarding:1\">"
+ 		"</u:SetDefaultConnectionServiceResponse>";
++
+ 	struct NameValueParserData data;
+ 	char * p;
++	int par_num;
++
+ 	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
+-	p = GetValueFromNameValueList(&data, "NewDefaultConnectionService");
+-	if(p) {
+-		syslog(LOG_INFO, "%s(%s) : Ignored", action, p);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "SetDefaultConnectionService" in arguments;
++	 * 		"NewDefaultConnectionService"
++	 */
++	if (par_num != 1 || isTagExist(&data, "NewDefaultConnectionService")) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		p = GetValueFromNameValueList(&data, "NewDefaultConnectionService");
++		if (p) {
++			/*
++			 * Operation:
++			 * It is ignored.
++			 */
++			BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
++		} else {
++			SoapError(h, 402, "Invalid Args");
++		}
+ 	}
++
+ 	ClearNameValueList(&data);
+-	BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
+ }
+ 
+ static void
+@@ -846,15 +1058,35 @@
+ 		"<NewDefaultConnectionService>%s:WANConnectionDevice:1,"
+ 		"urn:upnp-org:serviceId:WANIPConn1</NewDefaultConnectionService>"
+ 		"</u:%sResponse>";
+-	/* example from UPnP_IGD_Layer3Forwarding 1.0.pdf :
+-	 * uuid:44f5824f-c57d-418c-a131-f22b34e14111:WANConnectionDevice:1,
+-	 * urn:upnp-org:serviceId:WANPPPConn1 */
++
++	struct NameValueParserData data;
+ 	char body[1024];
+ 	int bodylen;
++	int par_num;
+ 
+-	bodylen = snprintf(body, sizeof(body), resp,
+-	                   action, uuidvalue, action);
+-	BuildSendAndCloseSoapResp(h, body, bodylen);
++	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "GetDefaultConnectionService" in arguments;
++	 * 		No in arguments.
++	 */
++	if (par_num != 0) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		/*
++		 * Operation:
++		 * Default connection service in the gateway is responded.
++		 * WANConnectionDevice's uuid is "uuidvalue_3".
++		 */
++		bodylen = snprintf(body, sizeof(body), resp,
++		                   action, uuidvalue2, action);
++		BuildSendAndCloseSoapResp(h, body, bodylen);
++	}
++
++	ClearNameValueList(&data);
+ }
+ #endif
+ 
+@@ -862,15 +1094,35 @@
+ static void
+ SetConnectionType(struct upnphttp * h, const char * action)
+ {
+-	const char * connection_type;
+ 	struct NameValueParserData data;
++	int par_num;
++	const char * p;
+ 
+ 	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
+-	connection_type = GetValueFromNameValueList(&data, "NewConnectionType");
+-	/* Unconfigured, IP_Routed, IP_Bridged */
++	par_num = NumberOfEntryNameValueList(&data);
++	syslog(LOG_INFO, "%s All_Tag_Num:%d\n", __FUNCTION__, par_num);
++	par_num -= VERBOSE_PAR_NUM;
++
++	/*
++	 * Action "SetConnectionType" in arguments;
++	 * 		NewConnectionType
++	 */
++	if (par_num != 1 || isTagExist(&data, "NewConnectionType")) {
++		SoapError(h, 402, "Invalid Args");
++	} else {
++		p = GetValueFromNameValueList(&data, "NewConnectionType");
++		if (p) {
++			/*
++			 * Operation:
++			 * Send response to control points that this is a read only parameter.
++			 */
++			SoapError(h, 731, "ReadOnly");
++		} else {
++			SoapError(h, 402, "Invalid Args");
++		}
++	}
++
+ 	ClearNameValueList(&data);
+-	/* always return a ReadOnly error */
+-	SoapError(h, 731, "ReadOnly");
+ }
+ 
+ /* Added for compliance with WANIPConnection v2 */

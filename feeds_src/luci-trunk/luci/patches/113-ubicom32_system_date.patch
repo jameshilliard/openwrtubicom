@@ -1,0 +1,17 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/system.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/system.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/system.lua	2011-01-14 00:13:35.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/system.lua	2011-02-14 10:04:58.000000000 +0200
+@@ -68,8 +68,11 @@
+   tostring(translate("free"))
+ )
+ 
+-s:taboption("general", DummyValue, "_systime", translate("Local Time")).value =
+- os.date("%c")
++o_date = s:taboption("general", DummyValue, "_systime", translate("Local Time"))
++
++function o_date.cfgvalue(...)
++	return os.date("%c")
++end 
+ 
+ s:taboption("general", DummyValue, "_uptime", translate("Uptime")).value =
+  luci.tools.webadmin.date_format(tonumber(uptime))

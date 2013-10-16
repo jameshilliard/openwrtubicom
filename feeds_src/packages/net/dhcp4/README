@@ -1,0 +1,45 @@
+		       ISC DHCP Port to OpenWrt
+			    Version 4.1.0
+			   December 8, 2008
+
+This package includes files to support ISC DHCP 4.1.0 on OpenWrt.
+Much of this work is based on the original "dhcp" package, which was
+based on ISC DHCP 3.1.0, and which was developed outside of ISC.
+
+			     NEW FEATURES
+
+- Support has been added for the DHCP client (missing from the
+  original OpenWrt package).
+
+- DHCP 4.x includes support for DHCPv6, so .init and .conf files have
+  been added for v6 client and server.
+
+		   CHANGES SINCE November 20, 2008
+
+- Tested on Kamikaze 7.09 and 8.09-RC1.
+
+- Added a menuconfig sub-menu for components and v6 support.  Adding
+  the "dhcpv6" pseudo-package enables v6 support to all configured
+  apps, and adds the kmod-ipv6 package.
+
+- v4 and v6 no longer overwrite each other's /etc/resolv.conf.
+
+			KNOWN BUGS/LIMITATIONS
+
+- The values in dhcpd.conf and dhcpd6.conf are examples only, and are
+  meant to be changed.
+
+- The relay agent has not been tested.  (This was a limitation in the
+  original OpenWrt package as well.)  When it is tested, .init and
+  .conf files will be added.
+
+- There is no integration with any web interface, be it X-Wrt, LuCI, etc.
+
+- Hotplug has not been tested.
+
+			       CONTACT
+
+Any feedback (positive or negative) is appreciated.  Please feel free
+to contact the author directly at pselkirk@isc.org.  Mail sent to
+dhcp-bugs@isc.org will be forwarded to me anyway, and mail sent to
+dhcp-users@isc.org will no doubt be met with confusion.

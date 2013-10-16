@@ -1,0 +1,11 @@
+
+config 'proc_vars' 'procentities'
+	option 'devicename' 'dslite'
+	option 'toggle' '0'
+	option 'l2tpipv4smtu' '1300'
+	option 'l2tpoverridesmtu' '0'
+	option 'smtu' '1300'
+	option 'ipv6smtu' '1300'
+	option 'overrideipv6smtu' '0'
+	option 'overridesmtu' '0'
+

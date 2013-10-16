@@ -1,0 +1,14 @@
+--- a/ssl.c
++++ b/ssl.c
+@@ -673,9 +673,11 @@ ssl_connection *new_ssl_connection(char 
+     ssl->method = SSLv23_client_method();
+     break;
+ 
++#ifndef OPENSSL_NO_SSLV2
+   case SSL_VERSION_SSLV2:
+     ssl->method = SSLv2_client_method();
+     break;
++#endif
+ 
+   case SSL_VERSION_SSLV3:
+     ssl->method = SSLv3_client_method();

@@ -1,0 +1,21 @@
+diff -ru luci-0.10+svn6791-old/libs/sys/luasrc/sys.lua luci-0.10+svn6791-new/libs/sys/luasrc/sys.lua
+--- luci-0.10+svn6791-old/libs/sys/luasrc/sys.lua	2011-02-10 15:44:57.000000000 +0200
++++ luci-0.10+svn6791-new/libs/sys/luasrc/sys.lua	2011-02-10 15:58:56.000000000 +0200
+@@ -426,7 +426,8 @@
+ 	if fs.access("/proc/net/ipv6_route", "r") then
+ 		local routes = { }
+ 
+-		for line in io.lines("/proc/net/ipv6_route") do
++		os.execute("cat /proc/net/ipv6_route | uniq > /tmp/ipv6_route") 
++		for line in io.lines("/tmp/ipv6_route") do 
+ 
+ 			local dst_ip, dst_prefix, src_ip, src_prefix, nexthop,
+ 				  metric, refcnt, usecnt, flags, dev = line:match(
+@@ -469,6 +470,7 @@
+ 			end
+ 		end
+ 
++		os.execute("rm -f /tmp/ipv6_route") 
+ 		return routes
+ 	end
+ end

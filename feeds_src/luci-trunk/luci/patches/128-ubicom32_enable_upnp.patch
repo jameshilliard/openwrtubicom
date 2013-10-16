@@ -1,0 +1,13 @@
+diff -Naur luci.a/applications/luci-upnp/root/etc/uci-defaults/luci-upnp luci.b/applications/luci-upnp/root/etc/uci-defaults/luci-upnp
+--- luci.a/applications/luci-upnp/root/etc/uci-defaults/luci-upnp	2011-06-20 18:18:59.475119060 +0300
++++ luci.b/applications/luci-upnp/root/etc/uci-defaults/luci-upnp	1970-01-01 02:00:00.000000000 +0200
+@@ -1,9 +0,0 @@
+-#!/bin/sh
+-
+-/etc/init.d/miniupnpd enabled && {
+-	/etc/init.d/miniupnpd stop
+-	/etc/init.d/miniupnpd disable
+-}
+-
+-rm -f /tmp/luci-indexcache
+-exit 0

@@ -1,0 +1,16 @@
+replacedefaultroute
+defaultroute
+refuse-eap
+mtu 1460
+default-asyncmap
+nopcomp
+noaccomp
+noccp
+novj
+nobsdcomp
+nodeflate
+lcp-echo-interval 30
+lcp-echo-failure 4
+lock
+noauth
+maxfail 0

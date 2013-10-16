@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2009-2010 OpenWrt.org
+
+START=60
+
+start() {
+	mkdir -p /var/cache/dmapd/
+	mkdir -p /var/run/dmapd/
+	mkdir -p /var/lock/subsys/
+
+	/usr/sbin/dmapd
+}
+
+stop() {
+	killall dmapd 2> /dev/null
+}

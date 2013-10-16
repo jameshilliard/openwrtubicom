@@ -1,0 +1,19 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-16 09:22:19.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-16 09:24:23.000000000 +0200
+@@ -80,6 +80,15 @@
+ dmz_host.datatype = "ipaddr"
+ dmz_host:depends("dmz_enable", "1")
+
++nt = {}
++nt[1] = s:taboption("advanced", ListValue, "tcp_nat_type", translate("TCP NAT Type"))
++nt[2] = s:taboption("advanced", ListValue, "udp_nat_type", translate("UDP NAT Type"))
++for i, v in ipairs(nt) do
++        v:value("0", translate("Port and Address Restricted"))
++        v:value("1", translate("Endpoint Independent"))
++        v:value("2", translate("Address Restricted"))
++end
++
+ s = m:section(TypedSection, "zone", translate("Zones"))
+ s.template = "cbi/tblsection"
+ s.anonymous = true

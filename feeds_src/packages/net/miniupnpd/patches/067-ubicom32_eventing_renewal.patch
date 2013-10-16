@@ -1,0 +1,56 @@
+diff -Naur a/upnphttp.c b/upnphttp.c
+--- a/upnphttp.c	2011-05-09 15:40:52.241875333 +0300
++++ b/upnphttp.c	2011-05-09 17:18:28.728876433 +0300
+@@ -70,6 +70,8 @@
+ 	char * colon;
+ 	char * p;
+ 	int n;
++	int cmp_len;
++
+ 	line = h->req_buf;
+ 	/* TODO : check if req_buf, contentoff are ok */
+ 	while(line < (h->req_buf + h->req_contentoff))
+@@ -77,6 +79,7 @@
+ 		colon = strchr(line, ':');
+ 		if(colon)
+ 		{
++			cmp_len = (unsigned int)colon - (unsigned int)line;
+ 			if(strncasecmp(line, "Content-Length", 14)==0)
+ 			{
+ 				p = colon;
+@@ -106,7 +109,7 @@
+ 				h->req_soapActionLen = n;
+ 			}
+ #ifdef ENABLE_EVENTS
+-			else if(strncasecmp(line, "Callback", 8)==0)
++			else if(strncasecmp(line, "Callback", cmp_len)==0)
+ 			{
+ 				p = colon;
+ 				while(*p != '<' && *p != '\r' )
+@@ -117,7 +120,7 @@
+ 				h->req_Callback = p + 1;
+ 				h->req_CallbackLen = MAX(0, n - 1);
+ 			}
+-			else if(strncasecmp(line, "SID", 3)==0)
++			else if(strncasecmp(line, "SID", cmp_len)==0)
+ 			{
+ 				p = colon + 1;
+ 				while(isspace(*p))
+@@ -135,7 +138,7 @@
+ by a UPnP Forum working committee. Defined by UPnP vendor.
+  Consists of the keyword "Second-" followed (without an
+ intervening space) by either an integer or the keyword "infinite". */
+-			else if(strncasecmp(line, "Timeout", 7)==0)
++			else if(strncasecmp(line, "Timeout", cmp_len)==0)
+ 			{
+ 				p = colon + 1;
+ 				while(isspace(*p))
+@@ -559,7 +562,7 @@
+ 	int templen;
+ 	if(!h->res_buf)
+ 	{
+-		templen = sizeof(httpresphead) + 128 + bodylen;
++		templen = sizeof(httpresphead) + 256 + bodylen;
+ 		h->res_buf = (char *)malloc(templen);
+ 		h->res_buf_alloclen = templen;
+ 	}

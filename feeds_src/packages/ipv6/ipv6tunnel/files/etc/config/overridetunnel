@@ -1,0 +1,16 @@
+
+config 'overridetunnel' 'general'
+	option 'localipv4addr' '192.168.5.5'
+	option 'WANip4addr' 'na'
+	option 'i6RDBr' 'na'
+	option 'i6RDPrefix' 'na'
+	option 'i6RDPrefixLength' 'na'
+	option 'TunnelType' '2'
+	option 'IPv4MaskLength' 'na'
+	option 'MSSOptionRewrite' '1'
+	option 'i6rdMTU' '1440'
+	option 'TunnelMode' '0'
+	option 'dhcp6_name_servers' '2001::2'
+	option 'ip6gateway' '2001::1'
+	option 'remoteendpointipv6addr' '2001::3'
+

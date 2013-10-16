@@ -1,0 +1,13 @@
+diff -urN ffmpeg-0.6.1-orig/libavformat/utils.c ffmpeg-0.6.1/libavformat/utils.c
+--- ffmpeg-0.6.1-orig/libavformat/utils.c	2010-06-15 16:31:27.000000000 +0300
++++ ffmpeg-0.6.1/libavformat/utils.c	2010-12-10 13:35:09.000000000 +0200
+@@ -282,6 +282,9 @@
+     return NULL;
+ }
+ 
++/* Using FF_SYMVER macro is causing the system to hang on ubicom32 platform. So, don`t use it. */
++#undef HAVE_SYMVER
++
+ #if LIBAVFORMAT_VERSION_MAJOR < 53 && CONFIG_SHARED && HAVE_SYMVER
+ FF_SYMVER(void, av_destruct_packet_nofree, (AVPacket *pkt), "LIBAVFORMAT_52")
+ {

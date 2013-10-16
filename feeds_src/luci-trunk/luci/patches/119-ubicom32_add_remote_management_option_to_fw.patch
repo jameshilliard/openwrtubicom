@@ -1,0 +1,16 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-15 13:31:04.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-15 14:45:00.000000000 +0200
+@@ -69,6 +69,12 @@
+ 
+ s:taboption("advanced", Flag, "wan_ping", translate("Enable WAN Ping"))
+ 
++s:taboption("advanced", Flag, "rmt_mng_enable", translate("Enable Remote Management"))
++rmt_mng_port = s:taboption("advanced", Value, "rmt_mng_port", translate("Remote Managament Port"))
++rmt_mng_port.datatype = "port"
++rmt_mng_port.default = 8080
++rmt_mng_port:depends("rmt_mng_enable", "1")    
++
+ s = m:section(TypedSection, "zone", translate("Zones"))
+ s.template = "cbi/tblsection"
+ s.anonymous = true

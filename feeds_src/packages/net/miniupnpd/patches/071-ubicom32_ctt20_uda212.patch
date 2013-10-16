@@ -1,0 +1,29 @@
+diff -Naur miniupnpd-bsp32.a/upnpdescstrings.h miniupnpd-bsp32.b/upnpdescstrings.h
+--- miniupnpd-bsp32.a/upnpdescstrings.h	2011-06-13 18:26:34.658792153 +0300
++++ miniupnpd-bsp32.b/upnpdescstrings.h	2011-06-13 18:30:56.547116820 +0300
+@@ -17,6 +17,7 @@
+ #define ROOTDEV_MODELDESCRIPTION	OS_NAME " router"
+ #define ROOTDEV_MODELURL			OS_URL
+ 
++#define UPC_DEFAULT					"000000000001"
+ #define WANDEV_FRIENDLYNAME			"WANDevice"
+ #define WANDEV_MANUFACTURER			"MiniUPnP"
+ #define WANDEV_MANUFACTURERURL		"http://miniupnp.free.fr/"
+@@ -24,7 +25,7 @@
+ #define WANDEV_MODELDESCRIPTION		"WAN Device"
+ #define WANDEV_MODELNUMBER			UPNP_VERSION
+ #define WANDEV_MODELURL				"http://miniupnp.free.fr/"
+-#define WANDEV_UPC					"MINIUPNPD"
++#define WANDEV_UPC					UPC_DEFAULT
+ 
+ #define WANCDEV_FRIENDLYNAME		"WANConnectionDevice"
+ #define WANCDEV_MANUFACTURER		WANDEV_MANUFACTURER
+@@ -33,7 +34,7 @@
+ #define WANCDEV_MODELDESCRIPTION	"MiniUPnP daemon"
+ #define WANCDEV_MODELNUMBER			UPNP_VERSION
+ #define WANCDEV_MODELURL			"http://miniupnp.free.fr/"
+-#define WANCDEV_UPC					"MINIUPNPD"
++#define WANCDEV_UPC					UPC_DEFAULT
+ 
+ #endif
+ 

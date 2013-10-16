@@ -1,0 +1,21 @@
+
+config 'softwire'
+	option 'name' 'softwire'
+	option 'mode' 'static'
+
+config 'limits' 'limits'
+	option 'maxports' '2'
+
+config 'portproxy'
+	option 'natpmpext' '1'
+	option 'aftripv6' '2000::1'
+	option 'wanipv6' '2000::2'
+	option 'lanipv4' '192.168.1.1'
+	option 'wanipv4' '192.0.0.2'
+	option 'aftripv4' '192.0.0.1'
+	option 'laniface' 'br-lan'
+	option 'waniface' 'eth0.1'
+	option 'natpmp' '1'
+	option 'upnpudp' '1'
+	option 'upnptcp' '1'
+

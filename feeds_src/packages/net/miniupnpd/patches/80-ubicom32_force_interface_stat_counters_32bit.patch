@@ -1,0 +1,39 @@
+Index: miniupnpd-1.5/linux/getifstats.c
+===================================================================
+--- miniupnpd-1.5.orig/linux/getifstats.c	2010-03-06 09:55:41.000000000 +0200
++++ miniupnpd-1.5/linux/getifstats.c	2011-08-10 14:40:06.658178083 +0300
+@@ -27,6 +27,7 @@ getifstats(const char * ifname, struct i
+ 	static struct ifdata cache_data;
+ 	time_t current_time;
+ #endif
++	unsigned long long temp;
+ 	if(!data)
+ 		return -1;
+ 	data->baudrate = 4200000;
+@@ -68,18 +69,22 @@ getifstats(const char * ifname, struct i
+ 			continue;
+ 		p++;
+ 		while(*p==' ') p++;
+-		data->ibytes = strtoul(p, &p, 0);
++		temp = strtoull(p, &p, 0);
++		data->ibytes = (unsigned long) temp;
+ 		while(*p==' ') p++;
+-		data->ipackets = strtoul(p, &p, 0);
++		temp = strtoull(p, &p, 0);
++		data->ipackets = (unsigned long) temp;
+ 		/* skip 6 columns */
+ 		for(i=6; i>0 && *p!='\0'; i--) {
+ 			while(*p==' ') p++;
+ 			while(*p!=' ' && *p) p++;
+ 		}
+ 		while(*p==' ') p++;
+-		data->obytes = strtoul(p, &p, 0);
++		temp = strtoull(p, &p, 0);
++		data->obytes = (unsigned long) temp;
+ 		while(*p==' ') p++;
+-		data->opackets = strtoul(p, &p, 0);
++		temp = strtoull(p, &p, 0);
++		data->opackets = (unsigned long) temp;
+ 		r = 0;
+ 		break;
+ 	}

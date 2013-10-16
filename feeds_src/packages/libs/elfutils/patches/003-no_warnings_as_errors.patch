@@ -1,0 +1,22 @@
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -322,7 +322,7 @@ INCLUDES = -I. -I$(srcdir) -I$(top_srcdi
+ 	-I$(srcdir)/../libdw -I$(srcdir)/../libdwfl \
+ 	-I$(srcdir)/../libasm
+ AM_CFLAGS = -std=gnu99 -Wall -Wshadow $(if \
+-	$($(*F)_no_Werror),,-Werror) $(if \
++	$($(*F)_no_Werror),,) $(if \
+ 	$($(*F)_no_Wunused),,-Wunused $(WEXTRA)) $(if \
+ 	$($(*F)_no_Wformat),-Wno-format,-Wformat=2) $($(*F)_CFLAGS) \
+ 	$(am__append_1)
+--- a/libelf/Makefile.in
++++ b/libelf/Makefile.in
+@@ -280,7 +280,7 @@ top_srcdir = @top_srcdir@
+ zip_LIBS = @zip_LIBS@
+ INCLUDES = -I. -I$(srcdir) -I$(top_srcdir)/lib -I..
+ AM_CFLAGS = -std=gnu99 -Wall -Wshadow $(if \
+-	$($(*F)_no_Werror),,-Werror) $(if \
++	$($(*F)_no_Werror),,) $(if \
+ 	$($(*F)_no_Wunused),,-Wunused $(WEXTRA)) $(if \
+ 	$($(*F)_no_Wformat),-Wno-format,-Wformat=2) $($(*F)_CFLAGS) \
+ 	$(am__append_1) $(am__append_2)

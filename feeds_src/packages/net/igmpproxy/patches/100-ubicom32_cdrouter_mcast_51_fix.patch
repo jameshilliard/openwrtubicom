@@ -1,0 +1,12 @@
+--- a/src/igmpproxy.h
++++ b/src/igmpproxy.h
+@@ -124,7 +124,8 @@
+ 
+ // Define timer constants (in seconds...)
+ #define INTERVAL_QUERY          125
+-#define INTERVAL_QUERY_RESPONSE  10
++//cdrouter_mcast_51 fix
++#define INTERVAL_QUERY_RESPONSE  5
+ //#define INTERVAL_QUERY_RESPONSE  10
+ 
+ #define ROUTESTATE_NOTJOINED            0   // The group corresponding to route is not joined

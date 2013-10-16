@@ -1,0 +1,57 @@
+--- openswan-2.6.29/programs/_updown.netkey/_updown.netkey.in	2010-09-27 19:40:32.000000000 +0300
++++ openswan-2.6.29-mod/programs/_updown.netkey/_updown.netkey.in	2011-05-31 15:46:09.700620795 +0300
+@@ -353,6 +353,41 @@
+     return $st
+ }
+  
++add_nf() { 
++	#allow client
++	iptables -A input_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT
++	iptables -A forwarding_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT
++	#insert NAT-Traversal rule
++	iptables -t nat -A postrouting_rule -s $PLUTO_MY_CLIENT -d $PLUTO_PEER_CLIENT -j ACCEPT
++
++	#include same rules into /etc/firewall.user
++	#just, in case firewall restart
++	echo "iptables -A input_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT" >> /etc/firewall.user
++	echo "iptables -A forwarding_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT" >> /etc/firewall.user
++	echo "iptables -t nat -A postrouting_rule -s $PLUTO_MY_CLIENT -d $PLUTO_PEER_CLIENT -j ACCEPT" >> /etc/firewall.user
++}
++
++delete_nf() { 
++	#delete client rule
++	iptables -D input_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT
++	iptables -D forwarding_rule -s $PLUTO_PEER_CLIENT -d $PLUTO_MY_CLIENT -j ACCEPT
++	#delete NAT-Traversal rule
++	iptables -t nat -D postrouting_rule -s $PLUTO_MY_CLIENT -d $PLUTO_PEER_CLIENT -j ACCEPT
++
++	#remove same rules from /etc/firewall.user
++	local my_client_ip peer_client_ip prefix
++	my_client_ip=${PLUTO_MY_CLIENT%/*}
++	prefix=${PLUTO_MY_CLIENT#*/}
++	[ -n "$prefix" ] && my_client_ip="$my_client_ip\\/$prefix"
++
++	peer_client_ip=${PLUTO_PEER_CLIENT%/*}
++	prefix=${PLUTO_PEER_CLIENT#*/}
++	[ -n "$prefix" ] && peer_client_ip="$peer_client_ip\\/$prefix"
++
++	sed -i '/iptables -A input_rule -s '$peer_client_ip' -d '$my_client_ip' -j ACCEPT/d' /etc/firewall.user
++	sed -i '/iptables -A forwarding_rule -s '$peer_client_ip' -d '$my_client_ip' -j ACCEPT/d' /etc/firewall.user
++	sed -i '/iptables -t nat -A postrouting_rule -s '$my_client_ip' -d '$peer_client_ip' -j ACCEPT/d' /etc/firewall.user
++}
+ 
+ # the big choice
+ case "$PLUTO_VERB" in
+@@ -379,10 +414,12 @@
+     up-client)
+ 	# connection to my client subnet coming up
+ 	# If you are doing a custom version, firewall commands go here.
++		add_nf
+ 	;;
+     down-client)
+ 	# connection to my client subnet going down
+ 	# If you are doing a custom version, firewall commands go here.
++		delete_nf
+ 	;;
+     updateresolvconf-host|updateresolvconf-client)
+         # updating resolv.conf using DNS info obtained from the server

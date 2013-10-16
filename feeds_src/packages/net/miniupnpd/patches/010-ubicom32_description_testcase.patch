@@ -1,0 +1,71 @@
+diff -Naur miniupnpd-1.5/miniupnpd.c miniupnpd-1.5.b/miniupnpd.c
+--- miniupnpd-1.5/miniupnpd.c	2010-09-21 18:31:43.000000000 +0300
++++ miniupnpd-1.5.b/miniupnpd.c	2011-03-28 18:21:29.980876343 +0300
+@@ -985,6 +985,10 @@
+ 	reload_from_lease_file();
+ #endif
+ 
++	memcpy(uuidvalue1, uuidvalue, strlen(uuidvalue));
++	memcpy(uuidvalue2, uuidvalue, strlen(uuidvalue));
++	snprintf(uuidvalue1 + 29, 13, "%0.*llx", 12, strtoll(uuidvalue + 29, NULL, 16) + 1);
++	snprintf(uuidvalue2 + 29, 13, "%0.*llx", 12, strtoll(uuidvalue + 29, NULL, 16) + 2);
+ 	return 0;
+ print_usage:
+ 	fprintf(stderr, "Usage:\n\t"
+diff -Naur miniupnpd-1.5/testupnpdescgen.c miniupnpd-1.5.b/testupnpdescgen.c
+--- miniupnpd-1.5/testupnpdescgen.c	2008-07-10 12:25:04.000000000 +0300
++++ miniupnpd-1.5.b/testupnpdescgen.c	2011-03-28 17:46:49.704876507 +0300
+@@ -13,6 +13,8 @@
+ #include "upnpdescgen.h"
+ 
+ char uuidvalue[] = "uuid:12345678-0000-0000-0000-00000000abcd";
++char uuidvalue1[] = "uuid:12345678-0000-0000-0000-00000000abce";
++char uuidvalue2[] = "uuid:12345678-0000-0000-0000-00000000abcf";
+ char serialnumber[] = "12345678";
+ char modelnumber[] = "1";
+ char presentationurl[] = "http://192.168.0.1:8080/";
+diff -Naur miniupnpd-1.5/upnpdescgen.c miniupnpd-1.5.b/upnpdescgen.c
+--- miniupnpd-1.5/upnpdescgen.c	2009-09-07 00:27:01.000000000 +0300
++++ miniupnpd-1.5.b/upnpdescgen.c	2011-03-28 17:46:49.704876507 +0300
+@@ -122,7 +122,7 @@
+ 	{"/modelNumber", WANDEV_MODELNUMBER},
+ 	{"/modelURL", WANDEV_MODELURL},
+ 	{"/serialNumber", serialnumber},
+-	{"/UDN", uuidvalue},
++	{"/UDN", uuidvalue1},
+ 	{"/UPC", WANDEV_UPC},
+ /* 30 */
+ 	{"serviceList", INITHELPER(32,1)},
+@@ -149,7 +149,7 @@
+ 	{"/modelNumber", WANCDEV_MODELNUMBER},
+ 	{"/modelURL", WANCDEV_MODELURL},
+ 	{"/serialNumber", serialnumber},
+-	{"/UDN", uuidvalue},
++	{"/UDN", uuidvalue2},
+ 	{"/UPC", WANCDEV_UPC},
+ 	{"serviceList", INITHELPER(51,1)},
+ /* 51 */
+diff -Naur miniupnpd-1.5/upnpglobalvars.c miniupnpd-1.5.b/upnpglobalvars.c
+--- miniupnpd-1.5/upnpglobalvars.c	2010-09-21 18:31:43.000000000 +0300
++++ miniupnpd-1.5.b/upnpglobalvars.c	2011-03-28 17:46:49.704876507 +0300
+@@ -49,6 +49,8 @@
+ const char * pidfilename = "/var/run/miniupnpd.pid";
+ 
+ char uuidvalue[] = "uuid:00000000-0000-0000-0000-000000000000";
++char uuidvalue1[] = "uuid:00000000-0000-0000-0000-000000000001";
++char uuidvalue2[] = "uuid:00000000-0000-0000-0000-000000000002";
+ char serialnumber[SERIALNUMBER_MAX_LEN] = "00000000";
+ 
+ char modelnumber[MODELNUMBER_MAX_LEN] = "1";
+diff -Naur miniupnpd-1.5/upnpglobalvars.h miniupnpd-1.5.b/upnpglobalvars.h
+--- miniupnpd-1.5/upnpglobalvars.h	2010-09-21 18:31:43.000000000 +0300
++++ miniupnpd-1.5.b/upnpglobalvars.h	2011-03-28 17:46:49.704876507 +0300
+@@ -55,6 +55,8 @@
+ extern const char * pidfilename;
+ 
+ extern char uuidvalue[];
++extern char uuidvalue1[];
++extern char uuidvalue2[];
+ 
+ #define SERIALNUMBER_MAX_LEN (10)
+ extern char serialnumber[];

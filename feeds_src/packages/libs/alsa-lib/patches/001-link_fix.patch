@@ -1,0 +1,22 @@
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -387,7 +387,7 @@ clean-libLTLIBRARIES:
+ 	  rm -f "$${dir}/so_locations"; \
+ 	done
+ libasound.la: $(libasound_la_OBJECTS) $(libasound_la_DEPENDENCIES) 
+-	$(LINK) -rpath $(libdir) $(libasound_la_LDFLAGS) $(libasound_la_OBJECTS) $(libasound_la_LIBADD) $(LIBS)
++	$(LINK) -rpath $(DESTDIR)$(libdir) $(libasound_la_LDFLAGS) $(libasound_la_OBJECTS) $(libasound_la_LIBADD) $(LIBS)
+ 
+ mostlyclean-compile:
+ 	-rm -f *.$(OBJEXT)
+--- a/src/pcm/scopes/Makefile.in
++++ b/src/pcm/scopes/Makefile.in
+@@ -341,7 +341,7 @@ clean-pkglibLTLIBRARIES:
+ 	  rm -f "$${dir}/so_locations"; \
+ 	done
+ scope-level.la: $(scope_level_la_OBJECTS) $(scope_level_la_DEPENDENCIES) 
+-	$(LINK) -rpath $(pkglibdir) $(scope_level_la_LDFLAGS) $(scope_level_la_OBJECTS) $(scope_level_la_LIBADD) $(LIBS)
++	$(LINK) -rpath $(DESTDIR)$(pkglibdir) $(scope_level_la_LDFLAGS) $(scope_level_la_OBJECTS) $(scope_level_la_LIBADD) $(LIBS)
+ 
+ mostlyclean-compile:
+ 	-rm -f *.$(OBJEXT)

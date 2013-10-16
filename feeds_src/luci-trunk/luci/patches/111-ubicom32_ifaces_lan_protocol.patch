@@ -1,0 +1,36 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-02-14 09:35:47.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-02-14 09:39:32.000000000 +0200
+@@ -80,18 +80,22 @@
+ p.default = "static"
+ p:value("static", translate("static"))
+ p:value("dhcp", "DHCP")
+-if has_pppd  then p:value("ppp",   "PPP")     end
+-if has_pppoe then p:value("pppoe", "PPPoE")   end
+-if has_pppoa then p:value("pppoa", "PPPoA")   end
+-if has_3g    then p:value("3g",    "UMTS/3G") end
+-if has_pptp  then p:value("pptp",  "PPTP")    end
+-if has_l2tp  then p:value("l2tp",  "L2TP")    end
+-if has_6in4  then p:value("6in4",  "6in4")    end
+-if has_6to4  then p:value("6to4",  "6to4")    end
++if arg[1] ~= "lan" then
++	if has_pppd  then p:value("ppp",   "PPP")     end
++	if has_pppoe then p:value("pppoe", "PPPoE")   end
++	if has_pppoa then p:value("pppoa", "PPPoA")   end
++	if has_3g    then p:value("3g",    "UMTS/3G") end
++	if has_pptp  then p:value("pptp",  "PPTP")    end
++	if has_l2tp  then p:value("l2tp",  "L2TP")    end
++	if has_6in4  then p:value("6in4",  "6in4")    end
++	if has_6to4  then p:value("6to4",  "6to4")    end
++end
+ p:value("none", translate("none"))
+ 
+-if not ( has_pppd and has_pppoe and has_pppoa and has_3g and has_pptp and has_l2tp ) then
+-	p.description = translate("You need to install \"comgt\" for UMTS/GPRS, \"ppp-mod-pppoe\" for PPPoE, \"ppp-mod-pppoa\" for PPPoA or \"pptp\" for PPtP support")
++if arg[1] ~= "lan" then
++	if not ( has_pppd and has_pppoe and has_pppoa and has_3g and has_pptp and has_l2tp ) then
++		p.description = translate("You need to install \"comgt\" for UMTS/GPRS, \"ppp-mod-pppoe\" for PPPoE, \"ppp-mod-pppoa\" for PPPoA or \"pptp\" for PPtP support")
++	end
+ end
+ 
+ br = s:taboption("physical", Flag, "type", translate("Bridge interfaces"), translate("creates a bridge over specified interface(s)"))

@@ -1,0 +1,54 @@
+diff -ruPN dhcp-4.1.0-m/client/dhc6.c dhcp-4.1.0-n/client/dhc6.c
+--- dhcp-4.1.0-m/client/dhc6.c	2008-06-12 19:08:41.000000000 +0530
++++ dhcp-4.1.0-n/client/dhc6.c	2009-07-01 12:09:35.000000000 +0530
+@@ -150,27 +150,38 @@
+ 	 * enough bytes for the hardware address (note that hw_address has
+ 	 * the 'htype' on byte zero).
+ 	 */
+-	len = 4 + (ip->hw_address.hlen - 1);
+-	if (!stateless)
+-		len += 4;
++	 //len = 4 + (ip->hw_address.hlen - 1);
++	len =  (ip->hw_address.hlen - 1);
++	//if (!stateless)
++	//	len += 4;
+ 	if (!buffer_allocate(&duid->buffer, len, MDL))
+ 		log_fatal("no memory for default DUID!");
+ 	duid->data = duid->buffer->data;
+ 	duid->len = len;
+ 
++	// Mohn Changed this
+ 	/* Basic Link Local Address type of DUID. */
+-	if (!stateless) {
+-		putUShort(duid->buffer->data, DUID_LLT);
+-		putUShort(duid->buffer->data + 2, ip->hw_address.hbuf[0]);
+-		putULong(duid->buffer->data + 4, cur_time - DUID_TIME_EPOCH);
+-		memcpy(duid->buffer->data + 8, ip->hw_address.hbuf + 1,
+-		       ip->hw_address.hlen - 1);
+-	} else {
+-		putUShort(duid->buffer->data, DUID_LL);
++	//if (!stateless) {
++	//	putUShort(duid->buffer->data, DUID_LLT);
++	//	putUShort(duid->buffer->data + 2, ip->hw_address.hbuf[0]);
++	//	putULong(duid->buffer->data + 4, cur_time - DUID_TIME_EPOCH);
++	//	memcpy(duid->buffer->data + 8, ip->hw_address.hbuf + 1,
++	//	       ip->hw_address.hlen - 1);
++	//} else {
++	
++	/*	putUShort(duid->buffer->data, DUID_LL);
+ 		putUShort(duid->buffer->data + 2, ip->hw_address.hbuf[0]);
+ 		memcpy(duid->buffer->data + 4, ip->hw_address.hbuf + 1,
+ 		       ip->hw_address.hlen - 1);
+-	}
++			   
++	*/
++	
++	memcpy(duid->buffer->data, ip->hw_address.hbuf + 1,
++		       ip->hw_address.hlen - 1);
++	
++	 // retwriting above lines to only output mac address and nothing else
++	 
++	//}
+ }
+ 
+ /*

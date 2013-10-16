@@ -1,0 +1,22 @@
+--- samba-3.0.24-orig/source/include/config.h	2010-11-05 08:52:41.301601592 +0200
++++ samba-3.0.24/source/include/config.h	2010-11-05 08:58:36.941101993 +0200
+@@ -1849,6 +1849,7 @@
+ 
+ /* The size of the 'off_t' type */
+ /* AR7 #define SIZEOF_OFF_T 8 */
++#undef SIZEOF_OFF_T
+ #define SIZEOF_OFF_T 4 /* AR7 */
+ 
+ /* The size of a `short', as computed by sizeof. */
+@@ -2226,6 +2226,11 @@
+ /* Whether to build vfs_shadow_copy as shared module */
+ #define vfs_shadow_copy_init init_module
+ 
++#define static_decl_vfs
++#define static_decl_pdb
++#define static_decl_charset
++#define static_decl_auth
++
+ /* Define to `unsigned short' if <sys/types.h> does not define. */
+ /* #undef wchar_t */
+ #undef HAVE_CREAT64

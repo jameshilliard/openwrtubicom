@@ -1,0 +1,79 @@
+diff -urN igmpproxy-0.1-orig/src/igmpproxy.c igmpproxy-0.1/src/igmpproxy.c
+--- igmpproxy-0.1-orig/src/igmpproxy.c	2009-08-27 22:32:28.000000000 +0300
++++ igmpproxy-0.1/src/igmpproxy.c	2011-04-14 14:15:58.080632571 +0300
+@@ -53,6 +53,7 @@
+ int     igmpProxyInit();
+ void    igmpProxyCleanUp();
+ void    igmpProxyRun();
++int     getTimeElapsedSinceBoot(struct timeval *time);
+ 
+ // Global vars...
+ static int sighandled = 0;
+@@ -238,7 +239,10 @@
+ 
+     // Initialize timer vars
+     difftime.tv_usec = 0;
+-    gettimeofday(&curtime, NULL);
++    if (getTimeElapsedSinceBoot(&curtime) < 0) {
++        curtime.tv_sec = 0;
++        curtime.tv_usec = 0;
++    }
+     lasttime = curtime;
+ 
+     // First thing we send a membership query in downstream VIF's...
+@@ -307,11 +311,16 @@
+                 curtime.tv_sec = lasttime.tv_sec + secs;
+                 curtime.tv_usec = lasttime.tv_usec;
+                 Rt = -1; /* don't do this next time through the loop */
+-            } else {
+-                gettimeofday(&curtime, NULL);
++            } else if (getTimeElapsedSinceBoot(&curtime) < 0) {
++                curtime.tv_sec = lasttime.tv_sec;
++                curtime.tv_usec = lasttime.tv_usec;
+             }
+-            difftime.tv_sec = curtime.tv_sec - lasttime.tv_sec;
+-            difftime.tv_usec += curtime.tv_usec - lasttime.tv_usec;
++            if (lasttime.tv_sec != 0) {
++                difftime.tv_sec = curtime.tv_sec - lasttime.tv_sec;
++                difftime.tv_usec += curtime.tv_usec - lasttime.tv_usec;
++            } else {
++                difftime = lasttime;
++	    }
+             while (difftime.tv_usec > 1000000) {
+                 difftime.tv_sec++;
+                 difftime.tv_usec -= 1000000;
+@@ -355,3 +364,23 @@
+         */
+     }
+ }
++
++/*
++ * Returns the seconds elapsed since the system booted
++ */
++int getTimeElapsedSinceBoot(struct timeval *time) {
++    struct sysinfo si;
++
++    if (time == NULL) {
++        return -1;
++    }
++
++    if (sysinfo(&si) < 0) {
++        return -1;
++    }
++
++    time->tv_sec = si.uptime;
++    time->tv_usec = 0;
++
++    return 1;
++}
+diff -urN igmpproxy-0.1-orig/src/igmpproxy.h igmpproxy-0.1/src/igmpproxy.h
+--- igmpproxy-0.1-orig/src/igmpproxy.h	2009-10-05 21:19:26.000000000 +0300
++++ igmpproxy-0.1/src/igmpproxy.h	2011-04-14 14:15:40.669368814 +0300
+@@ -50,6 +50,7 @@
+ #include <sys/time.h>
+ #include <sys/ioctl.h>
+ #include <sys/param.h>
++#include <sys/sysinfo.h>
+ 
+ #include <net/if.h>
+ #include <netinet/in.h>

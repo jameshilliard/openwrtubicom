@@ -1,0 +1,27 @@
+diff -ru luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua
+--- luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua	2011-02-14 13:12:47.000000000 +0200
++++ luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua	2011-02-14 15:22:39.000000000 +0200
+@@ -23,6 +23,11 @@
+ module "luci.cbi.datatypes"
+ 
+ 
++function lease_limit(val)
++	n = tonumber(val)
++	return ( n and n >= 0 and n <= 253 )
++end
++
+ function bool(val)
+ 	if val == "1" or val == "yes" or val == "on" or val == "true" then
+ 		return true
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua	2011-02-14 13:12:47.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua	2011-02-14 15:26:22.000000000 +0200
+@@ -160,7 +160,7 @@
+ 	translate("Maximum allowed number of active DHCP leases"))
+ 
+ lm.optional = true
+-lm.datatype = "uinteger"
++lm.datatype = "lease_limit"
+ lm.placeholder = translate("unlimited")
+ 
+ 

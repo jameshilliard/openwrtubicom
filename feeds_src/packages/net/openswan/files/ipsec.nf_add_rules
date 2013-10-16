@@ -1,0 +1,19 @@
+
+#This file included by /etc/firewall.user and
+#ipsec.init to add below ipsec rules during ipsec init and 
+#after every firewall restart
+
+[ -z "$(iptables -L input_rule | egrep '^ACCEPT.*udp.*udp dpt:500')" ] && { 
+	iptables -A input_rule -p udp --dport 500 -j ACCEPT
+}
+[ -z "$(iptables -L input_rule | egrep '^ACCEPT.*udp.*udp dpt:4500')" ] && { 
+	iptables -A input_rule -p udp --dport 4500 -j ACCEPT
+}
+[ -z "$(iptables -L input_rule | egrep '^ACCEPT.*esp')" ] && { 
+	iptables -A input_rule -p esp -j ACCEPT
+}
+[ -z "$(iptables -L forwarding_rule | egrep '^ACCEPT.*esp')" ] && { 
+	iptables -A forwarding_rule -p esp -j ACCEPT
+}
+
+

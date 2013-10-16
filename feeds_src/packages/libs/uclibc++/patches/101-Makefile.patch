@@ -1,0 +1,29 @@
+--- uClibc++-0.2.2/src/Makefile.org	2011-05-18 10:58:17.000000000 -0700
++++ uClibc++-0.2.2/src/Makefile	2011-05-18 11:02:53.000000000 -0700
+@@ -58,12 +58,14 @@
+ SUPOBJS =
+ endif
+ 
++UCLIBS= -L../../root-ubicom32/lib -lc -lgcc -Wl,--as-needed -lgcc_s -Wl,--no-as-needed
++
+ $(LIBNAME).a: libgcc_eh libsupc $(EXOBJS)
+ 	$(AR) $(ARFLAGS) $@ $(EXOBJS) $(GCCOBJS) $(SUPOBJS)
+ 	$(RANLIB) $@
+ 
+ $(SHARED_FULLNAME): libgcc_eh libsupc $(EXOBJS)
+-	$(CC) $(LDFLAGS) -o $@ $(EXOBJS) $(SUPOBJS) $(GCCOBJS) $(LIBS)
++	$(CC) $(LDFLAGS) $(CXXFLAGS) -o $@ $(EXOBJS) $(SUPOBJS) $(GCCOBJS) $(UCLIBS)
+ 	$(LN) $@ $(SHARED_MAJORNAME)
+ 	$(LN) $(SHARED_MAJORNAME) $(LIBNAME).so
+ 
+--- uClibc++-0.2.2/src/abi/libsupc/Makefile.org	2011-05-18 10:58:17.000000000 -0700
++++ uClibc++-0.2.2/src/abi/libsupc/Makefile	2011-05-18 11:04:07.000000000 -0700
+@@ -14,7 +14,7 @@
+ #
+ #else
+ #	echo Binary
+-	$(AR) x $(shell CC="$(CC)" $(TOPDIR)/scripts/find_libsupc.sh)
++	$(AR) x $(shell CC="$(CC) $(CXXFLAGS)" $(TOPDIR)/scripts/find_libsupc.sh)
+ 	$(RM) -f new_op*.o del_op*.o pure.o new_handler.o eh_alloc.o eh_globals.o
+ #
+ #endif

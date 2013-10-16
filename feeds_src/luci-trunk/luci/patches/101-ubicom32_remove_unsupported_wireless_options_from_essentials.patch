@@ -1,0 +1,130 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua
+--- luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2009-11-01 03:37:03.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-02-09 15:07:52.000000000 +0200
+@@ -193,8 +193,8 @@
+ mode = s:option(ListValue, "mode", translate("Mode"))
+ mode.override_values = true
+ mode:value("ap", translate("Provide (Access Point)"))
+-mode:value("adhoc", translate("Independent (Ad-Hoc)"))
+-mode:value("sta", translate("Join (Client)"))
++--mode:value("adhoc", translate("Independent (Ad-Hoc)"))
++--mode:value("sta", translate("Join (Client)"))
+ 
+ function mode.write(self, section, value)
+ 	if value == "sta" then
+@@ -218,44 +218,44 @@
+ encr = s:option(ListValue, "encryption", translate("Encryption"))
+ encr.override_values = true
+ encr:value("none", "No Encryption")
+-encr:value("wep", "WEP")
++--encr:value("wep", "WEP")
+ 
+ if hwtype == "atheros" or hwtype == "mac80211" then
+-	local supplicant = fs.access("/usr/sbin/wpa_supplicant")
+-	local hostapd    = fs.access("/usr/sbin/hostapd")
++	--local supplicant = fs.access("/usr/sbin/wpa_supplicant")
++	--local hostapd    = fs.access("/usr/sbin/hostapd")
+ 
+-	if hostapd and supplicant then
++	--if hostapd and supplicant then
+ 		encr:value("psk", "WPA-PSK")
+ 		encr:value("psk2", "WPA2-PSK")
+-		encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode")
+-		encr:value("wpa", "WPA-Radius", {mode="ap"}, {mode="sta"})
+-		encr:value("wpa2", "WPA2-Radius", {mode="ap"}, {mode="sta"})
+-	elseif hostapd and not supplicant then
+-		encr:value("psk", "WPA-PSK", {mode="ap"}, {mode="adhoc"})
+-		encr:value("psk2", "WPA2-PSK", {mode="ap"}, {mode="adhoc"})
+-		encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode", {mode="ap"}, {mode="adhoc"})
+-		encr:value("wpa", "WPA-Radius", {mode="ap"})
+-		encr:value("wpa2", "WPA2-Radius", {mode="ap"})
+-		encr.description = translate(
+-			"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
+-			"and ad-hoc mode) to be installed."
+-		)
+-	elseif not hostapd and supplicant then
+-		encr:value("psk", "WPA-PSK", {mode="sta"})
+-		encr:value("psk2", "WPA2-PSK", {mode="sta"})
+-		encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode", {mode="sta"})
+-		encr:value("wpa", "WPA-EAP", {mode="sta"})
+-		encr:value("wpa2", "WPA2-EAP", {mode="sta"})
+-		encr.description = translate(
+-			"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
+-			"and ad-hoc mode) to be installed."
+-		)		
+-	else
+-		encr.description = translate(
+-			"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
+-			"and ad-hoc mode) to be installed."
+-		)
+-	end
++		--encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode")
++		--encr:value("wpa", "WPA-Radius", {mode="ap"}, {mode="sta"})
++		--encr:value("wpa2", "WPA2-Radius", {mode="ap"}, {mode="sta"})
++	--elseif hostapd and not supplicant then
++		--encr:value("psk", "WPA-PSK", {mode="ap"}, {mode="adhoc"})
++		--encr:value("psk2", "WPA2-PSK", {mode="ap"}, {mode="adhoc"})
++		--encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode", {mode="ap"}, {mode="adhoc"})
++		--encr:value("wpa", "WPA-Radius", {mode="ap"})
++		--encr:value("wpa2", "WPA2-Radius", {mode="ap"})
++		--encr.description = translate(
++			--"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
++			--"and ad-hoc mode) to be installed."
++		--)
++	--elseif not hostapd and supplicant then
++		--encr:value("psk", "WPA-PSK", {mode="sta"})
++		--encr:value("psk2", "WPA2-PSK", {mode="sta"})
++		--encr:value("psk-mixed", "WPA-PSK/WPA2-PSK Mixed Mode", {mode="sta"})
++		--encr:value("wpa", "WPA-EAP", {mode="sta"})
++		--encr:value("wpa2", "WPA2-EAP", {mode="sta"})
++		--encr.description = translate(
++			--"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
++			--"and ad-hoc mode) to be installed."
++		--)		
++	--else
++		--encr.description = translate(
++			--"WPA-Encryption requires wpa_supplicant (for client mode) or hostapd (for AP " ..
++			--"and ad-hoc mode) to be installed."
++		--)
++	--end
+ elseif hwtype == "broadcom" then
+ 	encr:value("psk", "WPA-PSK")
+ 	encr:value("psk2", "WPA2-PSK")
+@@ -263,25 +263,25 @@
+ end
+ 
+ key = s:option(Value, "key", translate("Key"))
+-key:depends("encryption", "wep")
++--key:depends("encryption", "wep")
+ key:depends("encryption", "psk")
+ key:depends("encryption", "psk2")
+ key:depends("encryption", "psk+psk2")
+ key:depends("encryption", "psk-mixed")
+-key:depends({mode="ap", encryption="wpa"})
+-key:depends({mode="ap", encryption="wpa2"})
++--key:depends({mode="ap", encryption="wpa"})
++--key:depends({mode="ap", encryption="wpa2"})
+ key.rmempty = true
+ key.password = true
+ 
+-server = s:option(Value, "server", translate("Radius-Server"))
+-server:depends({mode="ap", encryption="wpa"})
+-server:depends({mode="ap", encryption="wpa2"})
+-server.rmempty = true
+-
+-port = s:option(Value, "port", translate("Radius-Port"))
+-port:depends({mode="ap", encryption="wpa"})
+-port:depends({mode="ap", encryption="wpa2"})
+-port.rmempty = true
++--server = s:option(Value, "server", translate("Radius-Server"))
++--server:depends({mode="ap", encryption="wpa"})
++--server:depends({mode="ap", encryption="wpa2"})
++--server.rmempty = true
++
++--port = s:option(Value, "port", translate("Radius-Port"))
++--port:depends({mode="ap", encryption="wpa"})
++--port:depends({mode="ap", encryption="wpa2"})
++--port.rmempty = true
+ 
+ 
+ if hwtype == "atheros" or hwtype == "mac80211" then

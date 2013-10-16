@@ -1,0 +1,12 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-02-14 09:42:07.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-02-14 09:45:49.000000000 +0200
+@@ -411,7 +411,7 @@
+ 	defaultroute:depends("proto", "pptp")
+ 	defaultroute:depends("proto", "l2tp")
+ 	defaultroute:depends("proto", "3g")
+-	defaultroute.rmempty = false
++	defaultroute.rmempty = true
+ 	function defaultroute.cfgvalue(...)
+ 		return ( AbstractValue.cfgvalue(...) or '1' )
+ 	end

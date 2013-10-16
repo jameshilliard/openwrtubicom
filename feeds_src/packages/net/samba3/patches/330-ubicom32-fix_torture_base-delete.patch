@@ -1,0 +1,219 @@
+--- samba-3.0.24-orig/source/include/smb.h	2010-11-05 10:08:09.394122729 +0200
++++ samba-3.0.24/source/include/smb.h	2010-11-03 16:16:13.772350622 +0200
+@@ -448,6 +448,7 @@
+ 	BOOL is_stat;
+ 	BOOL aio_write_behind;
+ 	BOOL lockdb_clean;
++	BOOL initial_delete_on_close; /* Only set at NTCreateX if file was created. */
+ 	char *fsp_name;
+  	FAKE_FILE_HANDLE *fake_file_handle;
+ } files_struct;
+--- samba-3.0.24-orig/source/smbd/server.c	2010-11-05 10:08:09.444601920 +0200
++++ samba-3.0.24/source/smbd/server.c	2010-11-05 10:20:10.414101957 +0200
+
+ /****************************************************************************
+  Open the socket communication - inetd.
+ ****************************************************************************/
+@@ -402,18 +401,6 @@
+ 
+ 	SAFE_FREE(ports);
+ 
+-        /* Listen to messages */
+-
+-        message_register(MSG_SMB_SAM_SYNC, msg_sam_sync);
+-        message_register(MSG_SMB_SAM_REPL, msg_sam_repl);
+-        message_register(MSG_SHUTDOWN, msg_exit_server);
+-        message_register(MSG_SMB_FILE_RENAME, msg_file_was_renamed);
+-	message_register(MSG_SMB_CONF_UPDATED, smb_conf_updated); 
+-
+-#ifdef DEVELOPER
+-	message_register(MSG_SMB_INJECT_FAULT, msg_inject_fault); 
+-#endif
+-
+ 	/* now accept incoming connections - forking a new process
+ 	   for each incoming connection */
+ 	DEBUG(2,("waiting for a connection\n"));
+@@ -1062,6 +1049,18 @@
+ 	dmapi_init_session();
+ #endif
+ 
++        /* Listen to messages */
++
++        message_register(MSG_SMB_SAM_SYNC, msg_sam_sync);
++        message_register(MSG_SMB_SAM_REPL, msg_sam_repl);
++        message_register(MSG_SHUTDOWN, msg_exit_server);
++        message_register(MSG_SMB_FILE_RENAME, msg_file_was_renamed);
++	message_register(MSG_SMB_CONF_UPDATED, smb_conf_updated); 
++
++#ifdef DEVELOPER
++	message_register(MSG_SMB_INJECT_FAULT, msg_inject_fault); 
++#endif
++
+ 	if (!open_sockets_smbd(is_daemon, interactive, ports))
+ 		exit(1);
+ 
+--- samba-3.0.24-orig/source/smbd/open.c	2010-11-05 10:08:09.434101076 +0200
++++ samba-3.0.24/source/smbd/open.c	2010-11-05 10:45:19.501101763 +0200
+@@ -336,6 +336,7 @@
+ 	fsp->print_file = False;
+ 	fsp->modified = False;
+ 	fsp->sent_oplock_break = NO_BREAK_SENT;
++	fsp->initial_delete_on_close = False;
+ 	fsp->is_directory = False;
+ 	fsp->is_stat = False;
+ 	if (conn->aio_write_behind_list &&
+@@ -1115,6 +1116,11 @@
+ 	struct share_mode_lock *lck = NULL;
+ 	uint32 open_access_mask = access_mask;
+ 	NTSTATUS status;
++	pstring updirectory;
++	pstring dirpath;
++	char *start;
++	struct share_mode_lock *updirlck;
++	SMB_STRUCT_STAT st;
+ 
+ 	if (conn->printer) {
+ 		/* 
+@@ -1146,6 +1152,40 @@
+ 		   create_disposition, create_options, unx_mode,
+ 		   oplock_request));
+ 
++	/*
++	 * Check whether a directory in the path has DELETE_PENDING state
++	 * If so, return an NT_STATUS_DELETE_PENDING error message
++	 */
++	*dirpath = 0;
++	pstrcpy(updirectory, fname);
++
++	stat_cache_lookup(conn, updirectory, dirpath, &start, &st);
++	
++	if (strcmp(fname, dirpath)) {
++		do {
++			/*
++			 * Check whether the updirectory has been opened before
++			 */
++			if (stat_cache_lookup(conn, updirectory, dirpath, &start, &st) == True) {
++				updirlck = get_share_mode_lock(NULL, st.st_dev, st.st_ino, NULL, NULL);
++				if (updirlck) {
++					if (updirlck->delete_on_close || updirlck->initial_delete_on_close) {
++						set_saved_error_triple(ERRDOS, ERRcannotopen, NT_STATUS_DELETE_PENDING);
++						return NULL;
++					}
++					TALLOC_FREE(updirlck);
++				}
++			}
++
++			if (!strcmp(updirectory, dirpath)) {
++				break;
++			}
++
++			pstrcpy(updirectory, dirpath);
++		}
++		while(*dirpath);
++	}
++
+ 	if ((pml = get_open_deferred_message(mid)) != NULL) {
+ 		struct deferred_open_record *state =
+ 			(struct deferred_open_record *)pml->private_data.data;
+@@ -1706,7 +1746,7 @@
+ 	set_share_mode(lck, fsp, current_user.ut.uid, 0, fsp->oplock_type);
+ 
+ 	if (info == FILE_WAS_OVERWRITTEN || info == FILE_WAS_CREATED ||
+-				info == FILE_WAS_SUPERSEDED) {
++				info == FILE_WAS_SUPERSEDED || info == FILE_WAS_OPENED) {
+ 
+ 		/* Handle strange delete on close create semantics. */
+ 		if (create_options & FILE_DELETE_ON_CLOSE) {
+@@ -1723,6 +1763,7 @@
+ 			}
+ 			/* Note that here we set the *inital* delete on close flag,
+ 			   not the regular one. */
++			fsp->initial_delete_on_close = True;
+ 			set_delete_on_close_token(lck, &current_user.ut);
+ 			lck->initial_delete_on_close = True;
+ 			lck->modified = True;
+@@ -1982,6 +2023,7 @@
+ 	fsp->print_file = False;
+ 	fsp->modified = False;
+ 	fsp->oplock_type = NO_OPLOCK;
++	fsp->initial_delete_on_close = False;
+ 	fsp->sent_oplock_break = NO_BREAK_SENT;
+ 	fsp->is_directory = True;
+ 	fsp->is_stat = False;
+@@ -2022,6 +2064,7 @@
+ 			return NULL;
+ 		}
+ 
++		fsp->initial_delete_on_close = True;
+ 		set_delete_on_close_token(lck, &current_user.ut);
+ 		lck->initial_delete_on_close = True;
+ 		lck->modified = True;
+@@ -2080,6 +2123,7 @@
+ 	fsp->print_file = False;
+ 	fsp->modified = False;
+ 	fsp->oplock_type = NO_OPLOCK;
++	fsp->initial_delete_on_close = False;
+ 	fsp->sent_oplock_break = NO_BREAK_SENT;
+ 	fsp->is_directory = False;
+ 	fsp->is_stat = True;
+--- samba-3.0.24-orig/source/smbd/close.c	2010-11-05 10:08:09.426101005 +0200
++++ samba-3.0.24/source/smbd/close.c	2010-11-05 10:23:19.693101943 +0200
+@@ -181,6 +181,9 @@
+ 				break;
+ 			}
+ 		}
++		if (lck->num_share_modes && (fsp->initial_delete_on_close == True)) {
++			lck->delete_on_close = True;
++		}
+ 	}
+ 
+ 	/* Notify any deferred opens waiting on this close. */
+@@ -382,6 +385,21 @@
+ 
+ 	delete_dir = (lck->delete_on_close | lck->initial_delete_on_close);
+ 
++	if (delete_dir) {
++		int i;
++		/* See if others still have the directory open. If this is the
++		 * case, then don't delete */
++		for (i=0; i<lck->num_share_modes; i++) {
++			if (is_valid_share_mode_entry(&lck->share_modes[i])) {
++				delete_dir = False;
++				break;
++			}
++		}
++		if (lck->num_share_modes && (fsp->initial_delete_on_close == True)) {
++			lck->delete_on_close = True;
++		}
++	}
++
+ 	if ((close_type == NORMAL_CLOSE || close_type == SHUTDOWN_CLOSE) &&
+ 				delete_dir &&
+ 				lck->delete_token) {
+--- samba-3.0.24-orig/source/smbd/trans2.c	2010-11-05 10:08:09.440601660 +0200
++++ samba-3.0.24/source/smbd/trans2.c	2010-11-05 10:26:01.533601883 +0200
+@@ -4432,12 +4432,18 @@
+ 			RESOLVE_DFSPATH(newname, conn, inbuf, outbuf);
+ 
+ 			/* Create the base directory. */
+-			pstrcpy(base_name, fname);
+-			p = strrchr_m(base_name, '/');
+-			if (p)
+-				*p = '\0';
+-			/* Append the new name. */
+-			pstrcat(base_name, "/");
++			p = strrchr_m(fname, '/');
++			if (p) {
++				pstrcpy(base_name, fname);
++				p = strrchr_m(base_name, '/');
++				if (p) {
++					*p = '\0';
++					/* Append the new name. */
++					pstrcat(base_name, "/");
++				}
++			} else {
++				*base_name = 0;
++			}
+ 			pstrcat(base_name, newname);
+ 
+ 			if (fsp) {

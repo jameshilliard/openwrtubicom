@@ -1,0 +1,50 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua	2009-10-31 17:54:11.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua	2011-02-10 11:15:15.000000000 +0200
+@@ -50,15 +50,17 @@
+ 	 or wifidata[ifname]["Access Point"])) or "-"
+ end
+ 
+-channel = s:option(DummyValue, "channel", translate("Channel"))
++channel = s:option(DummyValue, "_channel", translate("Channel"))
+ function channel.cfgvalue(self, section)
+ 	return wireless[self.map:get(section, "device")].channel
+ end
+ 
+-protocol = s:option(DummyValue, "_mode", translate("Protocol"))
++protocol = s:option(DummyValue, "_protocol", translate("Protocol"))
+ function protocol.cfgvalue(self, section)
+-	local mode = wireless[self.map:get(section, "device")].mode
+-	return mode and "802." .. mode
++	local ifname = self.map:get(section, "ifname")
++	local cmd = "iwgetid " .. ifname .. " -p"
++        cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
++        return luci.util.exec(cmd)
+ end
+ 
+ mode = s:option(DummyValue, "mode", translate("Mode"))
+diff -ru luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua
+--- luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-02-10 11:09:15.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-02-10 11:17:31.000000000 +0200
+@@ -67,15 +67,17 @@
+ 	 or wifidata[ifname]["Access Point"])) or "-"
+ end
+ 
+-channel = s:option(DummyValue, "channel", translate("Channel"))
++channel = s:option(DummyValue, "_channel", translate("Channel"))
+ function channel.cfgvalue(self, section)
+ 	return wireless[self.map:get(section, "device")].channel
+ end
+ 
+-protocol = s:option(DummyValue, "_mode", translate("Protocol"))
++protocol = s:option(DummyValue, "_protocol", translate("Protocol"))
+ function protocol.cfgvalue(self, section)
+-	local mode = wireless[self.map:get(section, "device")].mode
+-	return mode and "802." .. mode
++	local ifname = self.map:get(section, "ifname")
++	local cmd = "iwgetid " .. ifname .. " -p"
++        cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
++        return luci.util.exec(cmd)
+ end
+ 
+ mode = s:option(DummyValue, "mode", translate("Mode"))

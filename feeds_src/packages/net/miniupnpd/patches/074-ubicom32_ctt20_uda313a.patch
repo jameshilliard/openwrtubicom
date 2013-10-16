@@ -1,0 +1,142 @@
+diff -Naur miniupnpd-bsp32.a/minixml.c miniupnpd-bsp32.b/minixml.c
+--- miniupnpd-bsp32.a/minixml.c	2011-06-28 10:09:34.858424686 +0300
++++ miniupnpd-bsp32.b/minixml.c	2011-06-28 10:08:23.330901058 +0300
+@@ -153,8 +153,15 @@
+ 						if (p->xml >= p->xmlend)
+ 							return;
+ 					}
++					if (p->tagfunc) {
++						p->tagfunc(p->data);
++					}
+ 					if(i>0 && p->datafunc)
+ 						p->datafunc(p->data, data, i);
++				} else {
++					if (p->tagfunc) {
++						p->tagfunc(p->data);
++					}
+ 				}
+ 			}
+ 			else if(*p->xml == '/')
+diff -Naur miniupnpd-bsp32.a/minixml.h miniupnpd-bsp32.b/minixml.h
+--- miniupnpd-bsp32.a/minixml.h	2011-06-28 10:09:34.858424686 +0300
++++ miniupnpd-bsp32.b/minixml.h	2011-06-28 10:08:23.335492183 +0300
+@@ -24,6 +24,7 @@
+ 	void (*endeltfunc) (void *, const char *, int);
+ 	void (*datafunc) (void *, const char *, int);
+ 	void (*attfunc) (void *, const char *, int, const char *, int);
++	void (*tagfunc) (void *);
+ };
+ 
+ /* parsexml()
+diff -Naur miniupnpd-bsp32.a/upnpreplyparse.c miniupnpd-bsp32.b/upnpreplyparse.c
+--- miniupnpd-bsp32.a/upnpreplyparse.c	2011-06-28 10:09:34.858424686 +0300
++++ miniupnpd-bsp32.b/upnpreplyparse.c	2011-06-28 10:14:46.002609851 +0300
+@@ -37,12 +37,26 @@
+     LIST_INSERT_HEAD( &(data->head), nv, entries);
+ }
+ 
++static void NameValueParserGetTag(void * d)
++{
++    struct NameValueParserData * data = (struct NameValueParserData *)d;
++    struct NameOnly * no;
++
++    if ((no = malloc(sizeof(struct NameOnly))) == NULL) {
++    	return;
++    }
++    strncpy(no->name, data->curelt, 64);
++	no->name[63] = '\0';
++    LIST_INSERT_HEAD(&(data->head2), no, entries);
++}
++
+ void
+ ParseNameValue(const char * buffer, int bufsize,
+                     struct NameValueParserData * data)
+ {
+     struct xmlparser parser;
+     LIST_INIT(&(data->head));
++    LIST_INIT(&(data->head2));
+     /* init xmlparser object */
+     parser.xmlstart = buffer;
+     parser.xmlsize = bufsize;
+@@ -50,6 +64,7 @@
+     parser.starteltfunc = NameValueParserStartElt;
+     parser.endeltfunc = 0;
+     parser.datafunc = NameValueParserGetData;
++    parser.tagfunc = NameValueParserGetTag;
+ 	parser.attfunc = 0;
+     parsexml(&parser);
+ }
+@@ -63,6 +78,12 @@
+         LIST_REMOVE(nv, entries);
+         free(nv);
+     }
++
++    struct NameOnly * no;
++    while((no = pdata->head2.lh_first) != NULL) {
++    	LIST_REMOVE(no, entries);
++    	free(no);
++    }
+ }
+ 
+ char * 
+@@ -81,6 +102,32 @@
+     return p;
+ }
+ 
++/*
++ * Scan the list and check if the Name is exist. Return 0 on success,
++ * return -1 on fail.
++ */
++int isTagExist(struct NameValueParserData * pdata, const char * Name)
++{
++    struct NameOnly * no;
++
++    for (no = pdata->head2.lh_first; no != NULL; no = no->entries.le_next) {
++        if(!strcmp(no->name, Name))
++        	return 0;
++    }
++    return -1;
++}
++
++int NumberOfEntryNameValueList(struct NameValueParserData * pdata)
++{
++    struct NameOnly * no;
++    int i = 0;
++
++    for(no = pdata->head2.lh_first; no != NULL; no = no->entries.le_next) {
++    	i++;
++    }
++    return i;
++}
++
+ #if 0
+ /* useless now that minixml ignores namespaces by itself */
+ char *
+diff -Naur miniupnpd-bsp32.a/upnpreplyparse.h miniupnpd-bsp32.b/upnpreplyparse.h
+--- miniupnpd-bsp32.a/upnpreplyparse.h	2011-06-28 10:09:34.858424686 +0300
++++ miniupnpd-bsp32.b/upnpreplyparse.h	2011-06-28 10:08:23.330901058 +0300
+@@ -24,8 +24,14 @@
+     char value[64];
+ };
+ 
++struct NameOnly {
++	LIST_ENTRY(NameOnly) entries;
++	char name[64];
++};
++
+ struct NameValueParserData {
+     LIST_HEAD(listhead, NameValue) head;
++    LIST_HEAD(listhead2, NameOnly) head2;
+     char curelt[64];
+ };
+ 
+@@ -43,6 +49,9 @@
+ GetValueFromNameValueList(struct NameValueParserData * pdata,
+                           const char * Name);
+ 
++int isTagExist(struct NameValueParserData * pdata, const char * Name);
++int NumberOfEntryNameValueList(struct NameValueParserData * pdata);
++
+ /* GetValueFromNameValueListIgnoreNS() */
+ char *
+ GetValueFromNameValueListIgnoreNS(struct NameValueParserData * pdata,

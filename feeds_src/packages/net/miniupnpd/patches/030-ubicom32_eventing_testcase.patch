@@ -1,0 +1,22 @@
+diff -Naur miniupnpd-1.5.a/config.h.openwrt miniupnpd-1.5.b/config.h.openwrt
+--- miniupnpd-1.5.a/config.h.openwrt	2008-05-02 03:07:44.000000000 +0300
++++ miniupnpd-1.5.b/config.h.openwrt	2011-03-29 15:02:48.964876445 +0300
+@@ -23,5 +23,6 @@
+ #define USE_DAEMON
+ 
+ #define ENABLE_L3F_SERVICE
++#define ENABLE_EVENTS
+ 
+ #endif
+diff -Naur miniupnpd-1.5.a/Makefile.openwrt miniupnpd-1.5.b/Makefile.openwrt
+--- miniupnpd-1.5.a/Makefile.openwrt	2008-05-02 03:07:44.000000000 +0300
++++ miniupnpd-1.5.b/Makefile.openwrt	2011-03-29 15:11:21.204876552 +0300
+@@ -23,7 +23,7 @@
+ BASEOBJS = miniupnpd.o upnphttp.o upnpdescgen.o upnpsoap.o \
+            upnpreplyparse.o minixml.o \
+ 		   upnpredirect.o getifaddr.o daemonize.o upnpglobalvars.o \
+-		   options.o upnppermissions.o minissdp.o natpmp.o
++		   options.o upnppermissions.o minissdp.o natpmp.o upnpevents.o
+ 
+ LNXOBJS = linux/getifstats.o
+ NETFILTEROBJS = netfilter/iptcrdr.o

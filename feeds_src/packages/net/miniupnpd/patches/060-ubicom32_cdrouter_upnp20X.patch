@@ -1,0 +1,345 @@
+diff -Naur miniupnpd-1.5.a/miniupnpd.c miniupnpd-1.5.b/miniupnpd.c
+--- miniupnpd-1.5.a/miniupnpd.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/miniupnpd.c	2011-04-16 18:34:23.777375569 +0300
+@@ -1379,6 +1379,7 @@
+ #endif
+ #ifdef ENABLE_EVENTS
+ 		scan_and_clean_port_mapping_expiration();
++		subscriber_notify_update();
+ 		upnpevents_processfds(&readset, &writeset);
+ #endif
+ #ifdef ENABLE_NATPMP
+diff -Naur miniupnpd-1.5.a/natpmp.c miniupnpd-1.5.b/natpmp.c
+--- miniupnpd-1.5.a/natpmp.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/natpmp.c	2011-04-16 18:34:23.772875460 +0300
+@@ -245,7 +245,7 @@
+ 					snprintf(desc, sizeof(desc), "NAT-PMP %u", timestamp);
+ 					/* TODO : check return code */
+ 					if(upnp_redirect_internal(eport, senderaddrstr,
+-					                          iport, proto, desc, "0.0.0.0/0", 1, 0) < 0) {
++					                          iport, proto, desc, "0.0.0.0", 1, 0) < 0) {
+ 						syslog(LOG_ERR, "Failed to add NAT-PMP %hu %s->%s:%hu '%s'",
+ 						       eport, (proto==IPPROTO_TCP)?"tcp":"udp", senderaddrstr, iport, desc);
+ 						resp[3] = 3;  /* Failure */
+diff -Naur miniupnpd-1.5.a/netfilter/iptcrdr.c miniupnpd-1.5.b/netfilter/iptcrdr.c
+--- miniupnpd-1.5.a/netfilter/iptcrdr.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/netfilter/iptcrdr.c	2011-04-16 18:34:23.777375569 +0300
+@@ -71,7 +71,9 @@
+ 		if (p->eport == eport && p->proto == proto) {
+ 			p->LeaseDuration = LeaseDuration;
+ 			p->expire_time = time(NULL) + LeaseDuration;
+-			*out_expire_time = p->expire_time;
++			if (out_expire_time != NULL) {
++				*out_expire_time = p->expire_time;
++			}
+ 			break;
+ 		}
+ 	}
+@@ -112,7 +114,9 @@
+ 			p->Enabled = Enabled;
+ 			p->LeaseDuration = LeaseDuration;
+ 			p->expire_time = time(NULL) + LeaseDuration;
+-			*out_expire_time = p->expire_time;
++			if (out_expire_time != NULL) {
++				*out_expire_time = p->expire_time;
++			}
+ 			rdr_desc_list = p;
+ 		}
+ 	}
+@@ -149,40 +153,54 @@
+ {
+ 	struct rdr_desc * p;
+ 
+-	if (!desc || (desclen == 0)) {
++	if (!desc || !desclen) {
+ 		return -1;
+ 	}
+ 
+-	for(p = rdr_desc_list; p; p = p->next)
+-	{
+-		if(p->eport == eport && p->proto == (short)proto)
+-		{
++	for (p = rdr_desc_list; p; p = p->next)	{
++		if (p->eport == eport && p->proto == (short)proto) {
+ 			strncpy(desc, p->str, desclen);
+ 
+-			if (p->RemoteHost && (strlen(p->RemoteHost) > 6)) {
+-				strncpy(RemoteHost,p->RemoteHost,INET_ADDRSTRLEN);
+-			} else {
+-				RemoteHost[0] = '\0';
++			if (RemoteHost != NULL) {
++				if (p->RemoteHost && strlen(p->RemoteHost) > 6) {
++					strncpy(RemoteHost, p->RemoteHost, INET_ADDRSTRLEN);
++				} else {
++					RemoteHost[0] = '\0';
++				}
+ 			}
+ 
+-			*InternalPort = p->InternalPort;
++			if (InternalPort != NULL) {
++				*InternalPort = p->InternalPort;
++			}
+ 
+-			if (p->InternalClient && (strlen(p->InternalClient) > 6)) {
+-				strncpy(InternalClient,p->InternalClient,INET_ADDRSTRLEN);
+-			} else {
+-				InternalClient[0] = '\0';
++			if (InternalClient != NULL) {
++				if (p->InternalClient && strlen(p->InternalClient) > 6) {
++					strncpy(InternalClient, p->InternalClient, INET_ADDRSTRLEN);
++				} else {
++					InternalClient[0] = '\0';
++				}
+ 			}
+ 
+-			*Enabled = p->Enabled;
++			if (Enabled != NULL) {
++				*Enabled = p->Enabled;
++			}
+ 
+ 			if (p->LeaseDuration > 0) {
+ 				// finite
+-				*LeaseDuration = p->LeaseDuration;
+-				*out_expire_time = p->expire_time;
++				if (LeaseDuration != NULL) {
++					*LeaseDuration = p->LeaseDuration;
++				}
++				if (out_expire_time != NULL) {
++					*out_expire_time = p->expire_time;
++				}
+ 			} else {
+ 				// infinite
+-				*LeaseDuration = 0;
+-				*out_expire_time = 0;
++				if (LeaseDuration != NULL) {
++					*LeaseDuration = 0;
++				}
++				if (out_expire_time != NULL) {
++					*out_expire_time = 0;
++				}
+ 			}
+ 			return 0;
+ 		}
+@@ -250,12 +268,6 @@
+ 	const struct ip_nat_multi_range * mr;
+ 	const struct ipt_entry_match *match;
+ 
+-	char RemoteHost[INET_ADDRSTRLEN] = {0};
+-	unsigned short InternalPort = 0;
+-	char InternalClient[INET_ADDRSTRLEN] = {0};
+-	int Enabled = 0;
+-	long int LeaseDuration = 0;
+-
+ 	h = iptc_init("nat");
+ 	if(!h)
+ 	{
+@@ -305,9 +317,7 @@
+ 				/*if(desc)
+ 					strncpy(desc, "miniupnpd", desclen);*/
+ 
+-				get_redirect_desc(eport, proto, desc, desclen,
+-							RemoteHost, &InternalPort, InternalClient,
+-							&Enabled, &LeaseDuration, expire_time);
++				get_redirect_desc(eport, proto, desc, desclen, 0, 0, 0, 0, 0, expire_time);
+ 				if(packets)
+ 					*packets = e->counters.pcnt;
+ 				if(bytes)
+@@ -596,12 +606,10 @@
+  */
+ int delete_redirect_and_filter_rules(unsigned short eport, int proto)
+ {
+-	int r = delete_rule_and_commit("nat", miniupnpd_nat_chain, eport, proto, "delete_redirect_rule") |
+-			delete_rule_and_commit("filter", miniupnpd_forward_chain, eport, proto, "delete_filter_rule");
+-
+-	if (!r) {
++	int r = -1;
++	if ((r = delete_rule_and_commit("nat", miniupnpd_nat_chain, eport, proto, "delete_redirect_rule") &&
++	    delete_rule_and_commit("filter", miniupnpd_forward_chain, eport, proto, "delete_filter_rule")) == 0)
+ 		del_redirect_desc(eport, proto);
+-	}
+ 	return r;
+ }
+ 
+@@ -749,6 +757,7 @@
+ 	struct ipt_entry * e;
+ 	struct ipt_entry_match *match = NULL;
+ 	struct ipt_entry_target *target = NULL;
++	in_addr_t tmp_iaddr;
+ 
+ 	e = calloc(1, sizeof(struct ipt_entry));
+ 	e->ip.proto = proto;
+@@ -762,10 +771,12 @@
+ 	}
+ 	e->nfcache = NFC_IP_DST_PT;
+ 
+-	if(eaddr)
+-	{
+-		e->ip.src.s_addr = inet_addr(eaddr);
+-		e->ip.smsk.s_addr = INADDR_NONE;
++	if (eaddr) {
++		tmp_iaddr = inet_addr(eaddr);
++		if (tmp_iaddr != INADDR_NONE) {
++			e->ip.src.s_addr = tmp_iaddr;
++			e->ip.smsk.s_addr = INADDR_NONE;
++		}
+ 	}
+ 
+ 	target = get_dnat_target(iaddr, iport);
+diff -Naur miniupnpd-1.5.a/upnpdescgen.c miniupnpd-1.5.b/upnpdescgen.c
+--- miniupnpd-1.5.a/upnpdescgen.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/upnpdescgen.c	2011-04-16 18:34:23.777375569 +0300
+@@ -736,6 +736,18 @@
+ 			switch(v->ieventvalue) {
+ 			case 0:
+ 				break;
++
++			case 20:	/* Predefined ConnectionStatus magical value */
++			{
++				if (ConnectionStatus) {
++					snprintf(tmp, sizeof(tmp), "%s", upnpallowedvalues[23]); /* 23: "Disconnected" */
++				} else {
++					snprintf(tmp, sizeof(tmp), "%s", upnpallowedvalues[20]); /* 20: "Connected" */
++				}
++				str = strcat_str(str, len, &tmplen, tmp);
++			}
++				break;
++
+ 			case 253:	/* Port mapping number of entries magical value */
+ 				snprintf(tmp, sizeof(tmp), "%d", upnp_get_portmapping_number_of_entries());
+ 				str = strcat_str(str, len, &tmplen, tmp);
+diff -Naur miniupnpd-1.5.a/upnpevents.c miniupnpd-1.5.b/upnpevents.c
+--- miniupnpd-1.5.a/upnpevents.c	2009-12-22 19:22:13.000000000 +0200
++++ miniupnpd-1.5.b/upnpevents.c	2011-04-16 18:34:23.777375569 +0300
+@@ -476,5 +476,27 @@
+ }
+ #endif
+ 
++void subscriber_notify_update(void)
++{
++	struct subscriber * sub = NULL;
++	static char ext_ip_addr[INET_ADDRSTRLEN] = {0};
++	char tmp_ip_addr[INET_ADDRSTRLEN] = {0};
++
++	if ((ConnectionStatus = getifaddr(ext_if_name, tmp_ip_addr, INET_ADDRSTRLEN))) {
++		/*
++		 * It may corrupt the content of "tmp_ip_addr" buffer during the above process.
++		 */
++		tmp_ip_addr[0] = '\0';
++	}
++
++	if (strncmp(ext_ip_addr, tmp_ip_addr, INET_ADDRSTRLEN)) {
++		/*
++		 * ConnectionStatus is changed. Notify all subscribers.
++		 */
++		upnp_event_var_change_notify(EWanIPC);
++	}
++	memcpy(ext_ip_addr, tmp_ip_addr, INET_ADDRSTRLEN);
++}
++
+ #endif
+ 
+diff -Naur miniupnpd-1.5.a/upnpevents.h miniupnpd-1.5.b/upnpevents.h
+--- miniupnpd-1.5.a/upnpevents.h	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/upnpevents.h	2011-04-16 18:34:23.777375569 +0300
+@@ -36,6 +36,7 @@
+ #endif
+ 
+ void scan_and_clean_port_mapping_expiration(void);
++void subscriber_notify_update(void);
+ 
+ #endif
+ #endif
+diff -Naur miniupnpd-1.5.a/upnpglobalvars.c miniupnpd-1.5.b/upnpglobalvars.c
+--- miniupnpd-1.5.a/upnpglobalvars.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/upnpglobalvars.c	2011-04-16 18:34:23.777375569 +0300
+@@ -89,6 +89,14 @@
+ int n_lan_addr = 0;
+ struct lan_addr_s lan_addr[MAX_LAN_ADDR];
+ 
++#ifdef ENABLE_EVENTS
++/*
++ * -1 Disconnected
++ *  0 Connected
++ */
++int ConnectionStatus = -1;
++#endif /* ENABLE_EVENTS */
++
+ /* Path of the Unix socket used to communicate with MiniSSDPd */
+ const char * minissdpdsocketpath = "/var/run/minissdpd.sock";
+ 
+diff -Naur miniupnpd-1.5.a/upnpglobalvars.h miniupnpd-1.5.b/upnpglobalvars.h
+--- miniupnpd-1.5.a/upnpglobalvars.h	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/upnpglobalvars.h	2011-04-16 18:34:23.777375569 +0300
+@@ -104,6 +104,10 @@
+ extern struct rdr_desc * rdr_desc_list;
+ extern const char default_NewPortMappingDescription[64];
+ 
++#ifdef ENABLE_EVENTS
++extern int ConnectionStatus;
++#endif /* ENABLE_EVENTS */
++
+ extern void update_redirect_desc(unsigned short eport, int proto, const char *desc,
+ 		const char *RemoteHost, unsigned short InternalPort, const char *InternalClient,
+ 		int Enabled, long int LeaseDuration, long int *out_expire_time);
+diff -Naur miniupnpd-1.5.a/upnphttp.c miniupnpd-1.5.b/upnphttp.c
+--- miniupnpd-1.5.a/upnphttp.c	2009-02-13 21:38:34.000000000 +0200
++++ miniupnpd-1.5.b/upnphttp.c	2011-04-16 18:34:23.777375569 +0300
+@@ -343,6 +343,7 @@
+ 			if(renewSubscription(h->req_SID, h->req_SIDLen, h->req_Timeout) < 0) {
+ 				BuildResp2_upnphttp(h, 412, "Precondition Failed", 0, 0);
+ 			} else {
++				h->respflags = FLAG_TIMEOUT | FLAG_SID;
+ 				BuildResp_upnphttp(h, 0, 0);
+ 			}
+ 		}
+diff -Naur miniupnpd-1.5.a/upnpredirect.c miniupnpd-1.5.b/upnpredirect.c
+--- miniupnpd-1.5.a/upnpredirect.c	2011-04-12 19:55:27.000000000 +0300
++++ miniupnpd-1.5.b/upnpredirect.c	2011-04-16 18:34:23.777375569 +0300
+@@ -247,34 +247,29 @@
+ 	r = get_redirect_rule(ext_if_name, eport, proto,
+ 	                      iaddr_old, sizeof(iaddr_old), &iport_old, 0, 0, 0, 0, &expire_time);
+ 	if (r >= 0) {
+-		/*
+-		 * 0, already added by miniupnpd previously
+-		 * 1, already added by WEB GUI previously
+-		 */
+ 		/* if existing redirect rule matches redirect request return success
+ 		 * xbox 360 does not keep track of the port it redirects and will
+ 		 * redirect another port when receiving ConflictInMappingEntry */
+-		if (!r && strcmp(iaddr,iaddr_old) == 0 && iport == iport_old) {
+-			if (enabled) {
++		if (!r) {
++			if (strcmp(iaddr,iaddr_old) == 0 && iport == iport_old) {
++				if (enabled) {
+ #ifdef ENABLE_LEASEFILE
+-				lease_file_update(eport, iaddr, iport, proto, desc, eaddr, enabled, lease_duration);
++					lease_file_update(eport, iaddr, iport, proto, desc, eaddr, enabled, lease_duration);
+ #endif
+-				update_redirect_desc(eport, proto, desc, eaddr,iport, iaddr, enabled, lease_duration, &expire_time);
+-			}
+-		} else {
+-			if (r != 1) {
++					update_redirect_desc(eport, proto, desc, eaddr,iport, iaddr, enabled, lease_duration, &expire_time);
++				}
++				return 0;
++			} else {
+ 				syslog(LOG_INFO, "port %hu protocol %s already redirected to %s:%hu",
+-						eport, protocol, iaddr_old, iport_old);
++									eport, protocol, iaddr_old, iport_old);
+ 			}
+-			return -2;
+ 		}
+-	} else {
+-		syslog(LOG_INFO, "redirecting port %hu to %s:%hu protocol %s for: %s",
+-			eport, iaddr, iport, protocol, desc);
+-		return upnp_redirect_internal(eport, iaddr, iport, proto, desc, eaddr, enabled, lease_duration);
++		return -2;
+ 	}
+ 
+-	return 0;
++	syslog(LOG_INFO, "redirecting port %hu to %s:%hu protocol %s for: %s",
++			eport, iaddr, iport, protocol, desc);
++	return upnp_redirect_internal(eport, iaddr, iport, proto, desc, eaddr, enabled, lease_duration);
+ }
+ 
+ int

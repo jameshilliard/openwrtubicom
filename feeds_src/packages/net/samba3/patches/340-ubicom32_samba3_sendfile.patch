@@ -1,0 +1,22 @@
+--- samba-3.0.24/source/include/config.h.org	2010-12-13 14:11:21.000000000 -0800
++++ samba-3.0.24/source/include/config.h	2010-12-13 14:12:06.000000000 -0800
+@@ -1028,7 +1028,7 @@
+ /* AR7 #define HAVE_SENDFILE64 1 */
+ 
+ /* Whether sendfilev() is available */
+-/* #undef HAVE_SENDFILEV */
++#define HAVE_SENDFILEV
+ 
+ /* Whether sendfilev64() is available */
+ /* #undef HAVE_SENDFILEV64 */
+--- samba-3.0.24/source/param/loadparm.c.org	2010-12-13 15:37:21.000000000 -0800
++++ samba-3.0.24/source/param/loadparm.c	2010-12-13 15:43:06.000000000 -0800
+@@ -576,7 +576,7 @@
+ 	False,			/* bForcePrintername */
+ 	True,			/* bNTAclSupport */
+ 	False,                  /* bForceUnknownAclUser */
+-	False,			/* bUseSendfile */
++	True,			/* bUseSendfile */
+ 	False,			/* bProfileAcls */
+ 	False,			/* bMap_acl_inherit */
+ 	False,			/* bAfs_Share */

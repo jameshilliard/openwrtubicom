@@ -1,0 +1,164 @@
+diff -Naur miniupnpd-1.5.a/natpmp.c miniupnpd-1.5.b/natpmp.c
+--- miniupnpd-1.5.a/natpmp.c	2010-05-11 19:20:02.000000000 +0300
++++ miniupnpd-1.5.b/natpmp.c	2011-04-03 19:10:30.000000000 +0300
+@@ -243,7 +243,7 @@
+ 					snprintf(desc, sizeof(desc), "NAT-PMP %u", timestamp);
+ 					/* TODO : check return code */
+ 					if(upnp_redirect_internal(eport, senderaddrstr,
+-					                          iport, proto, desc) < 0) {
++					                          iport, proto, desc, "0.0.0.0/0") < 0) {
+ 						syslog(LOG_ERR, "Failed to add NAT-PMP %hu %s->%s:%hu '%s'",
+ 						       eport, (proto==IPPROTO_TCP)?"tcp":"udp", senderaddrstr, iport, desc);
+ 						resp[3] = 3;  /* Failure */
+diff -Naur miniupnpd-1.5.a/netfilter/iptcrdr.c miniupnpd-1.5.b/netfilter/iptcrdr.c
+--- miniupnpd-1.5.a/netfilter/iptcrdr.c	2010-12-09 18:13:05.000000000 +0200
++++ miniupnpd-1.5.b/netfilter/iptcrdr.c	2011-04-03 19:11:49.000000000 +0300
+@@ -154,9 +154,9 @@
+ int
+ add_redirect_rule2(const char * ifname, unsigned short eport,
+                    const char * iaddr, unsigned short iport, int proto,
+-				   const char * desc)
++				   const char * desc, const char * eaddr)
+ {
+-	int r = addnatrule(proto, eport, iaddr, iport);
++	int r = addnatrule(proto, eport, iaddr, iport, eaddr);
+ 	if(r >= 0)
+ 		add_redirect_desc(eport, proto, desc);
+ 	return r;
+@@ -593,7 +593,7 @@
+  * */
+ int
+ addnatrule(int proto, unsigned short eport,
+-           const char * iaddr, unsigned short iport)
++           const char * iaddr, unsigned short iport, const char * eaddr)
+ {
+ 	int r = 0;
+ 	struct ipt_entry * e;
+@@ -611,6 +611,13 @@
+ 		match = get_udp_match(eport);
+ 	}
+ 	e->nfcache = NFC_IP_DST_PT;
++
++	if(eaddr)
++	{
++		e->ip.src.s_addr = inet_addr(eaddr);
++		e->ip.smsk.s_addr = INADDR_NONE;
++	}
++
+ 	target = get_dnat_target(iaddr, iport);
+ 	e->nfcache |= NFC_UNKNOWN;
+ 	e = realloc(e, sizeof(struct ipt_entry)
+diff -Naur miniupnpd-1.5.a/netfilter/iptcrdr.h miniupnpd-1.5.b/netfilter/iptcrdr.h
+--- miniupnpd-1.5.a/netfilter/iptcrdr.h	2007-12-19 11:30:24.000000000 +0200
++++ miniupnpd-1.5.b/netfilter/iptcrdr.h	2011-04-03 19:16:07.000000000 +0300
+@@ -13,7 +13,7 @@
+ int
+ add_redirect_rule2(const char * ifname, unsigned short eport,
+                    const char * iaddr, unsigned short iport, int proto,
+-				   const char * desc);
++				   const char * desc, const char * eaddr);
+ 
+ int
+ add_filter_rule2(const char * ifname, const char * iaddr,
+@@ -29,7 +29,7 @@
+ 
+ int
+ addnatrule(int proto, unsigned short eport,
+-               const char * iaddr, unsigned short iport);
++               const char * iaddr, unsigned short iport, const char * eaddr);
+ 
+ int
+ add_filter_rule(int proto, const char * iaddr, unsigned short iport);
+diff -Naur miniupnpd-1.5.a/upnpredirect.c miniupnpd-1.5.b/upnpredirect.c
+--- miniupnpd-1.5.a/upnpredirect.c	2009-12-22 19:22:13.000000000 +0200
++++ miniupnpd-1.5.b/upnpredirect.c	2011-04-03 19:04:27.000000000 +0300
+@@ -223,7 +223,7 @@
+ int
+ upnp_redirect(unsigned short eport, 
+               const char * iaddr, unsigned short iport,
+-              const char * protocol, const char * desc)
++              const char * protocol, const char * desc, const char *eaddr)
+ {
+ 	int proto, r;
+ 	char iaddr_old[32];
+@@ -258,7 +258,7 @@
+ 	} else {
+ 		syslog(LOG_INFO, "redirecting port %hu to %s:%hu protocol %s for: %s",
+ 			eport, iaddr, iport, protocol, desc);			
+-		return upnp_redirect_internal(eport, iaddr, iport, proto, desc);
++		return upnp_redirect_internal(eport, iaddr, iport, proto, desc, eaddr);
+ 	}
+ 
+ 	return 0;
+@@ -267,11 +267,11 @@
+ int
+ upnp_redirect_internal(unsigned short eport,
+                        const char * iaddr, unsigned short iport,
+-                       int proto, const char * desc)
++                       int proto, const char * desc, const char * eaddr)
+ {
+ 	/*syslog(LOG_INFO, "redirecting port %hu to %s:%hu protocol %s for: %s",
+ 		eport, iaddr, iport, protocol, desc);			*/
+-	if(add_redirect_rule2(ext_if_name, eport, iaddr, iport, proto, desc) < 0) {
++	if(add_redirect_rule2(ext_if_name, eport, iaddr, iport, proto, desc, eaddr) < 0) {
+ 		return -1;
+ 	}
+ 
+diff -Naur miniupnpd-1.5.a/upnpredirect.h miniupnpd-1.5.b/upnpredirect.h
+--- miniupnpd-1.5.a/upnpredirect.h	2009-02-14 13:24:56.000000000 +0200
++++ miniupnpd-1.5.b/upnpredirect.h	2011-04-03 19:15:55.000000000 +0300
+@@ -25,14 +25,14 @@
+ int
+ upnp_redirect(unsigned short eport, 
+               const char * iaddr, unsigned short iport,
+-              const char * protocol, const char * desc);
++              const char * protocol, const char * desc, const char * eaddr);
+ 
+ /* upnp_redirect_internal()
+  * same as upnp_redirect() without any check */
+ int
+ upnp_redirect_internal(unsigned short eport,
+                        const char * iaddr, unsigned short iport,
+-                       int proto, const char * desc);
++                       int proto, const char * desc, const char * eaddr);
+ 
+ /* upnp_get_redirection_infos() */
+ int
+diff -Naur miniupnpd-1.5.a/upnpsoap.c miniupnpd-1.5.b/upnpsoap.c
+--- miniupnpd-1.5.a/upnpsoap.c	2011-01-01 22:24:42.000000000 +0200
++++ miniupnpd-1.5.b/upnpsoap.c	2011-04-03 19:50:18.000000000 +0300
+@@ -298,7 +298,7 @@
+ 		"xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\"/>";
+ 
+ 	struct NameValueParserData data;
+-	char * int_ip, * int_port, * ext_port, * protocol, * desc;
++	char * int_ip, * int_port, * ext_port, * protocol, * desc, * r_host;
+ 	char * leaseduration;
+ 	unsigned short iport, eport;
+ 
+@@ -352,6 +352,7 @@
+ 		}
+ 	}
+ 
++	r_host = GetValueFromNameValueList(&data, "NewRemoteHost");
+ 	int_port = GetValueFromNameValueList(&data, "NewInternalPort");
+ 	ext_port = GetValueFromNameValueList(&data, "NewExternalPort");
+ 	protocol = GetValueFromNameValueList(&data, "NewProtocol");
+@@ -376,7 +377,7 @@
+ 	syslog(LOG_INFO, "%s: ext port %hu to %s:%hu protocol %s for: %s",
+ 			action, eport, int_ip, iport, protocol, desc);
+ 
+-	r = upnp_redirect(eport, int_ip, iport, protocol, desc);
++	r = upnp_redirect(eport, int_ip, iport, protocol, desc, r_host);
+ 
+ 	ClearNameValueList(&data);
+ 
+@@ -496,7 +497,7 @@
+ 	}
+ 
+ 	/* TODO : accept a different external port */
+-	r = upnp_redirect(eport, int_ip, iport, protocol, desc);
++	r = upnp_redirect(eport, int_ip, iport, protocol, desc, r_host);
+ 
+ 	ClearNameValueList(&data);
+ 

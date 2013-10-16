@@ -1,0 +1,23 @@
+diff -pruN luci-0.10+svn6791/modules/admin-full/src/luci-bwc.c x/modules/admin-full/src/luci-bwc.c
+--- luci-0.10+svn6791/modules/admin-full/src/luci-bwc.c	2010-11-29 14:14:17.000000000 +0000
++++ x/modules/admin-full/src/luci-bwc.c	2011-07-26 13:37:51.000000000 +0100
+@@ -336,8 +336,17 @@ static int run_daemon(int nofork)
+ 			fclose(info);
+ 		}
+ 
+-		if ((info = fopen(ipc, "r")) != NULL)
+-		{
++		/*
++		 * Prefer to open the Ubicom Inc StreamEngine DB first to get the stats from there as it's less CPU intensive
++		 */
++		info = fopen("/sys/devices/system/streamengine_db/streamengine_db0/connection_counts_simple", "r");
++		if (info != NULL) {
++			if (fgets(line, sizeof(line), info)) {
++				sscanf(line, "%*s %u %*s %u %*s %u %*s", &tcp, &udp, &other);
++			}
++			update_cnstat(udp, tcp, other);
++			fclose(info);
++		} else if ((info = fopen(ipc, "r")) != NULL) {
+ 			udp   = 0;
+ 			tcp   = 0;
+ 			other = 0;

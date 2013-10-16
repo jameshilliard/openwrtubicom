@@ -1,0 +1,115 @@
+#!/bin/sh /etc/rc.common
+START=95
+
+find_zone() {
+	local config="${1}"
+	local z_name="${2}"
+	
+	local name
+	config_get name "${config}" name
+	[ "${name}" = "${z_name}" ] && echo "${name}" && return 1
+}
+
+start() {
+	type miniupnpd_add_rules >/dev/null 2>/dev/null || \
+		ACTION=- . /etc/hotplug.d/firewall/50-miniupnpd
+
+	config_load "upnpd"
+	local extiface intiface upload download logging secure enabled uuid
+
+	config_get extiface config external_iface
+	config_get intiface config internal_iface
+	config_get upload   config upload
+	config_get download config download
+	config_get_bool logging config log_output 0
+	config_get_bool secure config secure_mode 0
+	config_get_bool enabled config enabled 0 
+	config_get uuid config uuid
+
+	include /lib/network
+	scan_interfaces
+
+	local e_ifname
+	config_get e_ifname ${extiface:-wan} ifname
+
+	if [ -n "$e_ifname" ]; then
+		local args="-i $e_ifname"
+		local iface
+
+		for iface in ${intiface:-lan}; do
+			local ipaddr ifname proto
+			config_get ifname "$iface" ifname
+			config_get proto "$iface" proto
+			[ "$proto" = "dhcp" ] && {
+				# udhcpc client wait at least 10 seconds.
+				sleep 12
+			}
+			ipaddr=`ifconfig "$ifname" | grep "inet addr:" | sed -e 's/.*addr:\([0-9\.]*\).*/\1/'`
+			[ -n "$ipaddr" ] && append args "-a $ipaddr"
+		done
+		
+		if [ ! -n "$uuid" ]; then
+			[ -x /usr/bin/uuidgen ] && {
+				uuid=`/usr/bin/uuidgen`
+				uci_set upnpd config uuid "$uuid"
+				uci_commit upnpd
+				
+				append args "-u $uuid"
+			}
+		else
+			append args "-u $uuid"
+		fi
+
+		append args "-p 5000 -U"
+
+		[ -n "$upload" -a -n "$download" ] && \
+			append args "-B $(($download * 1024 * 8)) $(($upload * 1024 * 8))"
+
+		[ "$secure" -gt 0 ] && \
+			append args "-S"
+
+		# Disable IGMP snooping on bridge interface. Otherwise, M-SEARCH messages from hosts
+		# or UPnP Certification Test Tool are dropped by bridge for some cases. UPnP CTT test cases 2.0.0.0
+		# and 2.0.0.1 were failing because of this.
+		echo 0 > /sys/class/net/br-lan/bridge/multicast_snooping
+
+		if [ "$logging" = "1" ]; then
+			[ "$enabled" -gt 0 ] && eval start-stop-daemon -S -b -x miniupnpd -- $args -d | logger -t miniupnpd
+		else
+			[ "$enabled" -gt 0 ] && eval start-stop-daemon -S -b -x miniupnpd -- $args 2>/dev/null
+		fi
+
+		# start firewall
+		config_load firewall
+		local zone=`config_foreach find_zone zone ${extiface:-wan}`
+		[ -n "$zone" ] && \
+			miniupnpd_add_rules "$zone" "${extiface:-wan}" "$e_ifname"
+	else
+		logger -t "upnp daemon" "external interface not found, not starting"
+	fi
+}
+
+stop() {
+	start-stop-daemon -K -q -x miniupnpd -p /var/run/miniupnpd.pid
+	rm -f /var/run/miniupnpd.pid
+
+	# Do NOT enable back IGMP snooping on bridge interface, because
+	# minidlna may be running and it also needs it to be disabled.
+	# echo 1 > /sys/class/net/br-lan/bridge/multicast_snooping
+
+	type miniupnpd_remove_rules >/dev/null 2>/dev/null || \
+		ACTION=- . /etc/hotplug.d/firewall/50-miniupnpd
+
+	miniupnpd_remove_rules
+
+	iptables -t nat -F MINIUPNPD 2>/dev/null
+	iptables -t nat -X MINIUPNPD 2>/dev/null
+	iptables -t filter -F MINIUPNPD 2>/dev/null
+	iptables -t filter -X MINIUPNPD 2>/dev/null
+}
+
+restart() {
+	stop
+	start
+}
+

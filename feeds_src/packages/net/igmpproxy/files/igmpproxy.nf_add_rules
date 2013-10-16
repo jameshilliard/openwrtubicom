@@ -1,0 +1,15 @@
+
+#This file included by /etc/firewall.user and
+#igmpproxy.init to allow multicast packets from outside, if igmpproxy is running
+#and after every firewall restart
+
+proto_igmp=2
+mcastnet=224.0.0.0/4
+[ -z "$(iptables -L forwarding_rule -n | egrep ^ACCEPT.*$mcastnet)" ] && { 
+	wanif=$(uci get -P/var/state network.wan.ifname)
+	lanif=$(uci get -P/var/state network.lan.ifname)
+	iptables -I forwarding_rule -d $mcastnet -i $wanif -o $lanif -j ACCEPT
+}
+[ -z "$(iptables -L input_rule -n | egrep ^ACCEPT.*$proto_igmp.*$mcastnet)" ] && {
+	iptables -I input_rule -d $mcastnet -p igmp -j ACCEPT
+}

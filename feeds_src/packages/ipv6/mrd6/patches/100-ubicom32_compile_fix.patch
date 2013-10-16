@@ -1,0 +1,24 @@
+--- mrd6-0.9.6-orig/src/mrd.cpp	2011-03-16 12:35:07.492869949 +0200
++++ mrd6-0.9.6/src/mrd.cpp	2011-03-16 12:56:00.560769047 +0200
+@@ -2342,8 +2342,8 @@
+ 	out.xprintf("Registered sockets: %u reading, %u writing\n",
+ 		(uint32_t)m_read.size(), (uint32_t)m_write.size());
+ 	out.xprintf("MRIB prefix count: %u\n", mrib().registry_prefix_count());
+-	out.xprintf("Interface count: %u\n", m_intflist.size());
+-	out.xprintf("Group state count: %u\n", m_grplist.size());
++	out.xprintf("Interface count: %u\n", (uint32_t)m_intflist.size());
++	out.xprintf("Group state count: %u\n", (uint32_t)m_grplist.size());
+ 
+ 	return true;
+ }
+--- mrd6-0.9.6-orig/src/Makefile	2011-03-16 12:35:07.492869949 +0200
++++ mrd6-0.9.6/src/Makefile	2011-03-16 13:43:04.924870124 +0200
+@@ -91,7 +91,7 @@
+ 
+ DEST_PREFIX = $(DESTDIR)$(PREFIX)
+ 
+-CXXFLAGS = $(INCLUDES) -ansi -Wall -Wno-multichar -fno-exceptions -fPIC \
++CXXFLAGS = $(CFLAGS) $(INCLUDES) -ansi -Wall -Wno-multichar -fno-exceptions -fPIC \
+ 	   -D$(PLATFORM) $(addprefix -D,$(MODULE_OPTIONS))
+ 
+ ifeq ($(OPTIMIZE),yes)

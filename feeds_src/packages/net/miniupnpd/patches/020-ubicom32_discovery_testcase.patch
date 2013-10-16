@@ -1,0 +1,173 @@
+diff -Naur miniupnpd-1.5.patch010/minissdp.c miniupnpd-1.5.pure/minissdp.c
+--- miniupnpd-1.5.patch010/minissdp.c	2010-09-21 18:31:43.000000000 +0300
++++ miniupnpd-1.5.pure/minissdp.c	2011-04-06 15:36:34.764412703 +0300
+@@ -176,6 +176,20 @@
+ 	return 0;
+ }
+ 
++static const char *const known_service_uuids[] = {
++	uuidvalue,
++	uuidvalue,
++	uuidvalue,
++	uuidvalue1,
++	uuidvalue1,
++	uuidvalue2,
++	uuidvalue2,
++	uuidvalue,
++	uuidvalue1,
++	uuidvalue2,
++	0
++};
++
+ /*
+  * response from a LiveBox (Wanadoo)
+ HTTP/1.1 200 OK
+@@ -202,7 +216,7 @@
+ static void
+ SendSSDPAnnounce2(int s, struct sockaddr_in sockname,
+                   const char * st, int st_len, const char * suffix,
+-                  const char * host, unsigned short port)
++                  const char * host, unsigned short port, int i)
+ {
+ 	int l, n;
+ 	char buf[512];
+@@ -217,13 +231,14 @@
+ 		"CACHE-CONTROL: max-age=120\r\n"
+ 		/*"DATE: ...\r\n"*/
+ 		"ST: %.*s%s\r\n"
+-		"USN: %s::%.*s%s\r\n"
++		"USN: %s%s%.*s%s\r\n"
+ 		"EXT:\r\n"
+ 		"SERVER: " MINIUPNPD_SERVER_STRING "\r\n"
+ 		"LOCATION: http://%s:%u" ROOTDESC_PATH "\r\n"
+ 		"\r\n",
+ 		st_len, st, suffix,
+-		uuidvalue, st_len, st, suffix,
++		known_service_uuids[i], (i==1 || i==3 || i==5)?"":"::",
++		(i==1 || i==3 || i==5)?0:st_len, (i==1 || i==3 || i==5)?"":st, suffix,
+ 		host, (unsigned int)port);
+ 	n = sendto(s, buf, l, 0,
+ 	           (struct sockaddr *)&sockname, sizeof(struct sockaddr_in) );
+@@ -240,13 +255,15 @@
+ static const char * const known_service_types[] =
+ {
+ 	"upnp:rootdevice",
++	uuidvalue,
+ 	"urn:schemas-upnp-org:device:InternetGatewayDevice:",
+-	"urn:schemas-upnp-org:device:WANConnectionDevice:",
++	uuidvalue1,
+ 	"urn:schemas-upnp-org:device:WANDevice:",
++	uuidvalue2,
++	"urn:schemas-upnp-org:device:WANConnectionDevice:",
++	"urn:schemas-upnp-org:service:Layer3Forwarding:",
+ 	"urn:schemas-upnp-org:service:WANCommonInterfaceConfig:",
+ 	"urn:schemas-upnp-org:service:WANIPConnection:",
+-	"urn:schemas-upnp-org:service:WANPPPConnection:",
+-	"urn:schemas-upnp-org:service:Layer3Forwarding:",
+ 	0
+ };
+ 
+@@ -273,14 +290,16 @@
+ 				/*"Server:miniupnpd/1.0 UPnP/1.0\r\n"*/
+ 				"Server: " MINIUPNPD_SERVER_STRING "\r\n"
+ 				"NT:%s%s\r\n"
+-				"USN:%s::%s%s\r\n"
++				"USN:%s%s%s%s\r\n"
+ 				"NTS:ssdp:alive\r\n"
+ 				"\r\n",
+ 				SSDP_MCAST_ADDR, SSDP_PORT,
+ 				lifetime,
+ 				host, port,
+-				known_service_types[i], (i==0?"":"1"),
+-				uuidvalue, known_service_types[i], (i==0?"":"1") );
++				known_service_types[i], ((i==0 || i==1 || i==3 || i==5)?"":"1"),
++				known_service_uuids[i], (i==1 || i==3 || i==5)?"":"::",
++				(i==1 || i==3 || i==5)?"":known_service_types[i],
++				((i==0 || i==1 || i==3 || i==5)?"":"1"));
+ 		if(l>=sizeof(bufr))
+ 		{
+ 			syslog(LOG_WARNING, "SendSSDPNotifies(): truncated output");
+@@ -329,8 +348,11 @@
+ 		syslog(LOG_ERR, "recvfrom(udp): %m");
+ 		return;
+ 	}
+-	ProcessSSDPData(s, bufr, sendername, n, port);
+-
++	if(n > 0)
++	{
++		bufr[n] = 0;
++		ProcessSSDPData(s, bufr, sendername, n, port);
++	}
+ }
+ 
+ void ProcessSSDPData(int s, char *bufr, struct sockaddr_in sendername, int n, unsigned short port) {
+@@ -338,15 +360,27 @@
+ 	int lan_addr_index = 0;
+ 	char * st = 0;
+ 	int st_len = 0;
+-
++	char *pMx = 0;
+ 
+ 	if(memcmp(bufr, "NOTIFY", 6) == 0)
+ 	{
+ 		/* ignore NOTIFY packets. We could log the sender and device type */
+ 		return;
+ 	}
+-	else if(memcmp(bufr, "M-SEARCH", 8) == 0)
++	else if(memcmp(bufr, "M-SEARCH * HTTP/1.1", 19) == 0)
+ 	{
++		/* test case 2.1.14 and 2.1.15 */
++		if(!strcasestr((const char *)bufr, "MAN") || !(pMx = strcasestr((const char *)bufr, "MX")))
++		{
++			return;
++		}
++		
++		/* test case 2.1.16 2.1.17 and 2.1.18 */
++		if(!(pMx = strchr((const char *)pMx, ':')) || (1 > strtol((const char *)pMx + 1, NULL, 10)))
++		{
++			return;
++		}
++		
+ 		i = 0;
+ 		while(i < n)
+ 		{
+@@ -392,12 +426,14 @@
+ 			for(i = 0; known_service_types[i]; i++)
+ 			{
+ 				l = (int)strlen(known_service_types[i]);
+-				if(l<=st_len && (0 == memcmp(st, known_service_types[i], l)))
++				/* test case 2.1.7 and 2.1.9 */
++				if((l == st_len || (l < st_len && st[l] == '1')) &&
++					(0 == memcmp(st, known_service_types[i], l)))
+ 				{
+ 					syslog(LOG_INFO, "Single search found");
+ 					SendSSDPAnnounce2(s, sendername,
+ 					                  st, st_len, "",
+-					                  lan_addr[lan_addr_index].str, port);
++					                  lan_addr[lan_addr_index].str, port, i);
+ 					break;
+ 				}
+ 			}
+@@ -410,11 +446,12 @@
+ 				{
+ 					l = (int)strlen(known_service_types[i]);
+ 					SendSSDPAnnounce2(s, sendername,
+-					                  known_service_types[i], l, i==0?"":"1",
+-					                  lan_addr[lan_addr_index].str, port);
++						known_service_types[i], l, ((i==0 || i==1 || i==3 || i==5)?"":"1"),
++					                  lan_addr[lan_addr_index].str, port, i);
+ 				}
+ 			}
+ 			/* responds to request by UUID value */
++			/* Don't need any more this block ...
+ 			l = (int)strlen(uuidvalue);
+ 			if(l==st_len && (0 == memcmp(st, uuidvalue, l)))
+ 			{
+@@ -422,6 +459,7 @@
+ 				SendSSDPAnnounce2(s, sendername, st, st_len, "",
+ 				                  lan_addr[lan_addr_index].str, port);
+ 			}
++			*/
+ 		}
+ 		else
+ 		{

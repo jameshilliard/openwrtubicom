@@ -1,0 +1,77 @@
+diff -Naur miniupnpd-1.5/netfilter/iptcrdr.c miniupnpd-1.5_re31bsp/netfilter/iptcrdr.c
+--- miniupnpd-1.5/netfilter/iptcrdr.c	2011-04-30 21:13:32.210374213 +0300
++++ miniupnpd-1.5_re31bsp/netfilter/iptcrdr.c	2011-05-02 12:23:05.497488822 +0300
+@@ -993,49 +993,47 @@
+ 
+ void scan_and_clean_port_mapping_expiration(void)
+ {
+-	struct rdr_desc *current = NULL;
+-	struct rdr_desc *previous = NULL;
+-	time_t current_time;
++	struct rdr_desc *current = rdr_desc_list;
++	struct rdr_desc *next = NULL;
++	time_t current_time = time(NULL);
+ 	int changed = 0;
+-	int r;
++	unsigned short eport;
++	short proto;
+ 
+-	current_time = time(NULL);
+-	for (current = rdr_desc_list, previous = rdr_desc_list; current; current = current->next) {
++	while (current) {
+ 		if ((current->LeaseDuration != 0) && (current->expire_time <= current_time)) {
+ 			changed = 1;
+ 
+-			/*
+-			 * Remove nat and filter table rules.
+-			 */
+-			r = delete_redirect_and_filter_rules(current->eport, current->proto);
+ 			syslog(LOG_INFO, ""
+-					"rslt:%d str:%s enable:%d"
++					"str:%s enable:%d"
+ 					" lease(s):%ld current:%ld expire:%ld"
+ 					" iHost:%s:%u"
+ 					" eHost:%s:%u",
+-					r, current->str, current->Enabled,
++					current->str, current->Enabled,
+ 					current->LeaseDuration, current_time, current->expire_time,
+ 					current->InternalClient, current->InternalPort,
+ 					current->RemoteHost, current->eport);
+ 
+-#ifdef ENABLE_LEASEFILE
+-			lease_file_remove(current->eport, current->proto);
+-#endif
+ 			/*
+-			 * Remove rdr_desc_list related the rule.
++			 * Save for lease_file_remove.
++			 */
++			eport = current->eport;
++			proto = current->proto;
++
++			/*
++			 * Remove nat and filter table rules.
+ 			 */
+-			if (previous == rdr_desc_list) {
+-				/*
+-				 *  This is the first record in link list.
+-				 */
+-				rdr_desc_list = rdr_desc_list->next;
+-				free(current);
+-			} else {
+-				previous->next = current->next;
+-				free(current);
++			next = current->next;
++			if (!delete_redirect_and_filter_rules(current->eport, current->proto)) {
++				syslog(LOG_INFO, "Rule removed.");
++
++#ifdef ENABLE_LEASEFILE
++			lease_file_remove(eport, proto);
++#endif
+ 			}
++			current = next;
+ 		} else {
+-			previous = current;
++			current = current->next;
+ 		}
+ 	}
+ 

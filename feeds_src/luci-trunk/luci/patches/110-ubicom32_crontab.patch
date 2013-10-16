@@ -1,0 +1,16 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/crontab.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/crontab.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/crontab.lua	2009-10-31 17:54:11.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/crontab.lua	2011-02-14 10:35:47.000000000 +0200
+@@ -27,8 +27,12 @@
+ 
+ function f.handle(self, state, data)
+ 	if state == FORM_VALID then
++		os.execute("killall crond 2>/dev/null")
+ 		if data.crons then
+ 			fs.writefile(cronfile, data.crons:gsub("\r\n", "\n"))
++			os.execute("crond -c /etc/crontabs")
++		else
++			fs.unlink(cronfile)
+ 		end
+ 	end
+ 	return true

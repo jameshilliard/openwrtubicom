@@ -1,0 +1,16 @@
+--- samba-3.0.24-orig/source/smbd/process.c	2010-11-06 15:12:03.626445041 +0200
++++ samba-3.0.24/source/smbd/process.c	2010-11-06 12:17:23.166445571 +0200
+@@ -911,6 +911,13 @@
+ 		uint16 session_tag = (lp_security() == SEC_SHARE) ? UID_FIELD_INVALID : SVAL(inbuf,smb_uid);
+ 		connection_struct *conn = conn_find(SVAL(inbuf,smb_tid));
+ 
++		/*
++		 * Check whether the VUID is valid (torture test BASE-VUID and BASE-TCON - defect #3250 and #3259)
++		 */
++		if (conn && (conn->vuid != SVAL(inbuf, smb_uid))) {
++			return ERROR_FORCE_DOS(ERRSRV,ERRbaduid);
++		}
++
+ 		DEBUG(3,("switch message %s (pid %d) conn 0x%lx\n",smb_fn_name(type),(int)pid,(unsigned long)conn));
+ 
+ 		smb_dump(smb_fn_name(type), 1, inbuf, size);

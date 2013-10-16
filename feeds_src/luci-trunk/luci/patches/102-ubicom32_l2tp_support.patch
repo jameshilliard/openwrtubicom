@@ -1,0 +1,204 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-01-19 20:42:06.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/ifaces.lua	2011-02-09 16:07:15.000000000 +0200
+@@ -25,6 +25,7 @@
+ 
+ local has_3g     = fs.access("/usr/bin/gcom")
+ local has_pptp   = fs.access("/usr/sbin/pptp")
++local has_l2tp   = fs.access("/usr/sbin/l2tpd")
+ local has_pppd   = fs.access("/usr/sbin/pppd")
+ local has_pppoe  = fs.glob("/usr/lib/pppd/*/rp-pppoe.so")()
+ local has_pppoa  = fs.glob("/usr/lib/pppd/*/pppoatm.so")()
+@@ -84,11 +85,12 @@
+ if has_pppoa then p:value("pppoa", "PPPoA")   end
+ if has_3g    then p:value("3g",    "UMTS/3G") end
+ if has_pptp  then p:value("pptp",  "PPTP")    end
++if has_l2tp  then p:value("l2tp",  "L2TP")    end
+ if has_6in4  then p:value("6in4",  "6in4")    end
+ if has_6to4  then p:value("6to4",  "6to4")    end
+ p:value("none", translate("none"))
+ 
+-if not ( has_pppd and has_pppoe and has_pppoa and has_3g and has_pptp ) then
++if not ( has_pppd and has_pppoe and has_pppoa and has_3g and has_pptp and has_l2tp ) then
+ 	p.description = translate("You need to install \"comgt\" for UMTS/GPRS, \"ppp-mod-pppoe\" for PPPoE, \"ppp-mod-pppoa\" for PPPoA or \"pptp\" for PPtP support")
+ end
+ 
+@@ -237,8 +239,10 @@
+ mtu.datatype = "uinteger"
+ mtu.placeholder = 1500
+ 
+-srv = s:taboption("general", Value, "server", translate("<abbr title=\"Point-to-Point Tunneling Protocol\">PPTP</abbr>-Server"))
++-- TODO check for L2TP again
++srv = s:taboption("general", Value, "server", translate("<abbr title=\"Point-to-Point Tunneling Protocol\">PPTP/L2TP</abbr>-Server"))
+ srv:depends("proto", "pptp")
++srv:depends("proto", "l2tp")
+ srv.optional = false
+ srv.datatype = "host"
+ 
+@@ -314,10 +318,11 @@
+ 	tunid:depends("proto", "6in4")
+ end
+ 
+-if has_pppd or has_pppoe or has_pppoa or has_3g or has_pptp or has_6in4 then
++if has_pppd or has_pppoe or has_pppoa or has_3g or has_pptp or has_l2tp or has_6in4 then
+ 	user = s:taboption("general", Value, "username", translate("Username"))
+ 	user.rmempty = true
+ 	user:depends("proto", "pptp")
++	user:depends("proto", "l2tp")
+ 	user:depends("proto", "pppoe")
+ 	user:depends("proto", "pppoa")
+ 	user:depends("proto", "ppp")
+@@ -328,6 +333,7 @@
+ 	pass.rmempty = true
+ 	pass.password = true
+ 	pass:depends("proto", "pptp")
++	pass:depends("proto", "l2tp")
+ 	pass:depends("proto", "pppoe")
+ 	pass:depends("proto", "pppoa")
+ 	pass:depends("proto", "ppp")
+@@ -335,12 +341,13 @@
+ 	pass:depends("proto", "6in4")
+ end
+ 
+-if has_pppd or has_pppoe or has_pppoa or has_3g or has_pptp then
++if has_pppd or has_pppoe or has_pppoa or has_3g or has_pptp or has_l2tp then
+ 	ka = s:taboption("ppp", Value, "keepalive",
+ 	 translate("Keep-Alive"),
+ 	 translate("Number of failed connection tests to initiate automatic reconnect")
+ 	)
+ 	ka:depends("proto", "pptp")
++	ka:depends("proto", "l2tp")
+ 	ka:depends("proto", "pppoe")
+ 	ka:depends("proto", "pppoa")
+ 	ka:depends("proto", "ppp")
+@@ -353,6 +360,7 @@
+ 	demand.optional = true
+ 	demand.datatype = "uinteger"
+ 	demand:depends("proto", "pptp")
++	demand:depends("proto", "l2tp")
+ 	demand:depends("proto", "pppoe")
+ 	demand:depends("proto", "pppoa")
+ 	demand:depends("proto", "ppp")
+@@ -381,7 +389,7 @@
+ 	vpi.datatype = "uinteger"
+ end
+ 
+-if has_pptp or has_pppd or has_pppoe or has_pppoa or has_3g then
++if has_pptp or has_l2tp or has_pppd or has_pppoe or has_pppoa or has_3g then
+ 	device = s:taboption("general", Value, "device",
+ 	 translate("Modem device"),
+ 	 translate("The device node of your modem, e.g. /dev/ttyUSB0")
+@@ -397,6 +405,7 @@
+ 	defaultroute:depends("proto", "pppoa")
+ 	defaultroute:depends("proto", "pppoe")
+ 	defaultroute:depends("proto", "pptp")
++	defaultroute:depends("proto", "l2tp")
+ 	defaultroute:depends("proto", "3g")
+ 	defaultroute.rmempty = false
+ 	function defaultroute.cfgvalue(...)
+@@ -411,6 +420,7 @@
+ 	peerdns:depends("proto", "pppoa")
+ 	peerdns:depends("proto", "pppoe")
+ 	peerdns:depends("proto", "pptp")
++	peerdns:depends("proto", "l2tp")
+ 	peerdns:depends("proto", "3g")
+ 	peerdns.rmempty = false
+ 	function peerdns.cfgvalue(...)
+@@ -423,6 +433,7 @@
+ 		ipv6:depends("proto", "pppoa")
+ 		ipv6:depends("proto", "pppoe")
+ 		ipv6:depends("proto", "pptp")
++		ipv6:depends("proto", "l2tp")
+ 		ipv6:depends("proto", "3g")
+ 	end
+ 
+@@ -434,6 +445,7 @@
+ 	connect:depends("proto", "pppoe")
+ 	connect:depends("proto", "pppoa")
+ 	connect:depends("proto", "pptp")
++	connect:depends("proto", "l2tp")
+ 	connect:depends("proto", "3g")
+ 
+ 	disconnect = s:taboption("ppp", Value, "disconnect",
+@@ -444,6 +456,7 @@
+ 	disconnect:depends("proto", "pppoe")
+ 	disconnect:depends("proto", "pppoa")
+ 	disconnect:depends("proto", "pptp")
++	disconnect:depends("proto", "l2tp")
+ 	disconnect:depends("proto", "3g")
+ 
+ 	pppd_options = s:taboption("ppp", Value, "pppd_options",
+@@ -454,6 +467,7 @@
+ 	pppd_options:depends("proto", "pppoa")
+ 	pppd_options:depends("proto", "pppoe")
+ 	pppd_options:depends("proto", "pptp")
++	pppd_options:depends("proto", "l2tp")
+ 	pppd_options:depends("proto", "3g")
+ 
+ 	maxwait = s:taboption("ppp", Value, "maxwait",
+diff -ru luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/network.lua luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/network.lua
+--- luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/network.lua	2010-03-27 16:54:06.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/network.lua	2011-02-09 16:14:04.000000000 +0200
+@@ -18,6 +18,7 @@
+ local fs  = require "nixio.fs"
+ 
+ local has_pptp  = fs.access("/usr/sbin/pptp")
++local has_l2tp  = luci.fs.mtime("/usr/sbin/l2tpd")
+ local has_pppoe = fs.glob("/usr/lib/pppd/*/rp-pppoe.so")()
+ 
+ local network = luci.model.uci.cursor_state():get_all("network")
+@@ -117,18 +118,19 @@
+ p:value("dhcp", translate("automatic"))
+ if has_pppoe then p:value("pppoe", "PPPoE") end
+ if has_pptp  then p:value("pptp",  "PPTP")  end
++if has_l2tp  then p:value("l2tp",  "L2TP")  end
+ 
+ function p.write(self, section, value)
+ 	-- Always set defaultroute to PPP and use remote dns
+ 	-- Overwrite a bad variable behaviour in OpenWrt
+-	if value == "pptp" or value == "pppoe" then
++	if value == "pptp" or value == "pppoe" or value == "l2tp" then
+ 		self.map:set(section, "peerdns", "1")
+ 		self.map:set(section, "defaultroute", "1")
+ 	end
+ 	return ListValue.write(self, section, value)
+ end
+ 
+-if not ( has_pppoe and has_pptp ) then
++if not ( has_pppoe and has_pptp and has_l2tp ) then
+ 	p.description = translate("You need to install \"ppp-mod-pppoe\" for PPPoE or \"pptp\" for PPtP support")
+ end
+ 
+@@ -150,11 +152,13 @@
+ usr = s:option(Value, "username", translate("Username"))
+ usr:depends("proto", "pppoe")
+ usr:depends("proto", "pptp")
++usr:depends("proto", "l2tp")
+ 
+ pwd = s:option(Value, "password", translate("Password"))
+ pwd.password = true
+ pwd:depends("proto", "pppoe")
+ pwd:depends("proto", "pptp")
++pwd:depends("proto", "l2tp")
+ 
+ 
+ -- Allow user to set MSS correction here if the UCI firewall is installed
+@@ -187,6 +191,7 @@
+ kea = s:option(Flag, "keepalive", translate("automatically reconnect"))
+ kea:depends("proto", "pppoe")
+ kea:depends("proto", "pptp")
++kea:depends("proto", "l2tp")
+ kea.rmempty = true
+ kea.enabled = "10"
+ 
+@@ -194,8 +199,10 @@
+ cod = s:option(Value, "demand", translate("disconnect when idle for"), "s")
+ cod:depends("proto", "pppoe")
+ cod:depends("proto", "pptp")
++cod:depends("proto", "l2tp")
+ cod.rmempty = true
+ 
++-- TODO for L2TP
+ srv = s:option(Value, "server", translate("<abbr title=\"Point-to-Point Tunneling Protocol\">PPTP</abbr>-Server"))
+ srv:depends("proto", "pptp")
+ srv.rmempty = true

@@ -1,0 +1,9 @@
+
+#This file included by ipsec.init to remove below ipsec rules during ipsec stop
+
+iptables -D input_rule -p udp --dport 500  -j ACCEPT 2>/dev/null
+iptables -D input_rule -p udp --dport 4500 -j ACCEPT 2>/dev/null
+iptables -D input_rule -p esp -j ACCEPT 2>/dev/null
+iptables -D forwarding_rule -p esp -j ACCEPT 2>/dev/null
+
+

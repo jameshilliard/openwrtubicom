@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Params - dev_name dev_mtu link_mtu ifconfig_local_ip ifconfig_remote_ip [init|restart]
+
+# Add the tap interface to the bridge for server-bridge mode
+if [ "$mode" = "server_bridge" ]; then
+	ifconfig $1 up
+	brctl addif br-lan $1
+fi
+
+# For server modes, make sure corresponding rule exists in iptables to accept connections from WAN
+if [ "$mode" = "server" -o "$mode" = "server_bridge" ]; then
+	if [ -z "$(iptables -L input_rule | egrep "^ACCEPT.*$proto_1.*$proto_1 dpt:$local_port_1 ")" ]; then 
+		iptables -A input_rule -p $proto_1 --dport $local_port_1 -j ACCEPT
+	fi
+fi

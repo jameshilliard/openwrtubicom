@@ -1,0 +1,33 @@
+diff -Naur miniupnpd-bsp32.a/upnphttp.c miniupnpd-bsp32.b/upnphttp.c
+--- miniupnpd-bsp32.a/upnphttp.c	2011-06-14 08:44:05.966792916 +0300
++++ miniupnpd-bsp32.b/upnphttp.c	2011-06-14 09:04:40.988293487 +0300
+@@ -549,9 +549,9 @@
+ 	"Content-Type: %s\r\n"
+ 	"Connection: close\r\n"
+ 	"Content-Length: %d\r\n"
+-	/*"Server: miniupnpd/1.0 UPnP/1.0\r\n"*/
+-	"Server: " MINIUPNPD_SERVER_STRING "\r\n"
+-	;	/*"\r\n";*/
++	"EXT: \r\n"
++	"Server: " MINIUPNPD_SERVER_STRING "\r\n";
++
+ /*
+ 		"<?xml version=\"1.0\"?>\n"
+ 		"<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+@@ -572,14 +572,14 @@
+ 	int templen;
+ 	if(!h->res_buf)
+ 	{
+-		templen = sizeof(httpresphead) + 256 + bodylen;
++		templen = sizeof(httpresphead) + 384 + bodylen;
+ 		h->res_buf = (char *)malloc(templen);
+ 		h->res_buf_alloclen = templen;
+ 	}
+ 	h->res_buflen = snprintf(h->res_buf, h->res_buf_alloclen,
+ 	                         httpresphead, h->HttpVer,
+ 	                         respcode, respmsg,
+-	                         (h->respflags&FLAG_HTML)?"text/html":"text/xml",
++	                         (h->respflags&FLAG_HTML)?"text/html":"text/xml; charset=\"utf-8\"",
+ 							 bodylen);
+ 
+ 	/*

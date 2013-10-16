@@ -1,0 +1,11 @@
+--- wide-dhcpv6-20080615-orig/dhcp6s.conf.sample	2007-03-21 11:52:56.000000000 +0200
++++ wide-dhcpv6-20080615/dhcp6s.conf.sample	2011-02-14 13:26:04.427530998 +0200
+@@ -16,7 +16,7 @@
+ # stateless address configuration via RA, please set the autonomous-flag to
+ # OFF in your RA configuration.
+ 
+-interface fxp0 {
++interface br-lan {
+ 	address-pool pool1 3600;
+ };
+ 

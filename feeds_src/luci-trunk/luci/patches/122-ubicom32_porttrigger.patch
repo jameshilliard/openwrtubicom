@@ -1,0 +1,30 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-17 15:37:41.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-17 16:08:43.000000000 +0200
+@@ -288,4 +288,26 @@
+
+ s:option(DummyValue, "target", translate("Action"))
+
++--
++-- PortTriggers
++--
++
++s = m:section(TypedSection, "porttrigger", translate("Port Trigger Rules"))
++s.anonymous = true
++s.template = "cbi/tblsection"
++s.addremove = true
++
++pr = {}
++pr[1] = s:option(ListValue, "trigger_proto", translate("Trigger Protocol"))
++tp = s:option(Value, "trigger_port", translate("Trigger Port"))
++pr[2] = s:option(ListValue, "forward_proto", translate("Forward Protocol"))
++fp = s:option(Value, "forward_port", translate("Forward Port"))
++
++for i, v in ipairs(pr) do
++        v:value("tcp", translate("tcp"))
++        v:value("udp", translate("udp"))
++        v:value("ALL", translate("ALL"))
++end
++
++
+ return m

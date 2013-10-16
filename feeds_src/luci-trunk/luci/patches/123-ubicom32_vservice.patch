@@ -1,0 +1,27 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-21 15:09:47.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-21 15:16:48.000000000 +0200
+@@ -309,5 +309,23 @@
+         v:value("ALL", translate("ALL"))
+ end
+
++--
++-- VServices
++--
++
++s = m:section(TypedSection, "vservice", translate("Virtual Services"))
++s.anonymous = true
++s.template = "cbi/tblsection"
++s.addremove = true
++
++vproto = s:option(ListValue, "proto", translate("Protocol"))
++vproto:value("tcp", translate("tcp"))
++vproto:value("udp", translate("udp"))
++vproto:value("ALL", translate("ALL"))
++
++vaddr = s:option(Value, "addr", translate("Server Address"))
++vaddr.datatype = "ipaddr"
++vport = s:option(Value, "port", translate("Port"))
++vport.datatype = "port"
+
+ return m

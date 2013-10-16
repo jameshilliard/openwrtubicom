@@ -1,0 +1,11 @@
+--- samba-3.0.24-orig/source/smbd/reply.c	2010-11-05 08:52:41.213601871 +0200
++++ samba-3.0.24/source/smbd/reply.c	2010-11-08 14:44:19.136601285 +0200
+@@ -645,7 +645,7 @@
+ 		password.data[passlen]=0;    
+ 	}
+ 
+-	p = smb_buf(inbuf) + passlen;
++	p = smb_buf(inbuf) + passlen + 1;
+ 	p += srvstr_pull_buf(inbuf, path, p, sizeof(path), STR_TERMINATE);
+ 
+ 	/*

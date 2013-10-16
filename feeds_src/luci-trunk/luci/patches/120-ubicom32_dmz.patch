@@ -1,0 +1,15 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-15 15:24:32.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-15 15:33:09.000000000 +0200
+@@ -75,6 +75,11 @@
+ rmt_mng_port.default = 8080
+ rmt_mng_port:depends("rmt_mng_enable", "1")    
+ 
++s:taboption("advanced", Flag, "dmz_enable", translate("Enable DMZ"))
++dmz_host = s:taboption("advanced", Value, "dmz_host", translate("DMZ Host"))
++dmz_host.datatype = "ipaddr"    
++dmz_host:depends("dmz_enable", "1")
++
+ s = m:section(TypedSection, "zone", translate("Zones"))
+ s.template = "cbi/tblsection"
+ s.anonymous = true

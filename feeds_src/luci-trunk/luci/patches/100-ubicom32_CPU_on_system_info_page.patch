@@ -1,0 +1,14 @@
+diff -ru luci-0.10+svn6791-old/libs/sys/luasrc/sys.lua luci-0.10+svn6791-new/libs/sys/luasrc/sys.lua
+--- luci-0.10+svn6791-old/libs/sys/luasrc/sys.lua	2011-01-25 14:51:41.000000000 +0200
++++ luci-0.10+svn6791-new/libs/sys/luasrc/sys.lua	2011-02-09 12:02:01.000000000 +0200
+@@ -189,6 +189,10 @@
+ 		model = cpuinfo:match("cpu model.-:%s*([^\n]+)")
+ 	end
+ 
++	if not model then
++		model = cpuinfo:match("CPU.-:%s*([^\n]+)")
++	end
++
+ 	return system, model, memtotal, memcached, membuffers, memfree, bogomips
+ end
+ 

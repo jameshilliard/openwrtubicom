@@ -1,0 +1,12 @@
+diff -Naur miniupnpd-bsp32.org/minissdp.c miniupnpd-bsp32.b/minissdp.c
+--- miniupnpd-bsp32.org/minissdp.c	2011-06-13 17:10:28.424292556 +0300
++++ miniupnpd-bsp32.b/minissdp.c	2011-06-13 18:26:34.658792153 +0300
+@@ -427,7 +427,7 @@
+ 			{
+ 				l = (int)strlen(known_service_types[i]);
+ 				/* test case 2.1.7 and 2.1.9 */
+-				if((l == st_len || (l < st_len && st[l] == '1')) &&
++				if((l == st_len || (l < st_len && !memcmp(&st[l], "1\0", st_len - l))) &&
+ 					(0 == memcmp(st, known_service_types[i], l)))
+ 				{
+ 					syslog(LOG_INFO, "Single search found");

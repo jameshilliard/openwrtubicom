@@ -1,0 +1,47 @@
+diff -Naur miniupnpd-bsp32.a/upnphttp.c miniupnpd-bsp32.b/upnphttp.c
+--- miniupnpd-bsp32.a/upnphttp.c	2011-06-13 18:30:56.547116820 +0300
++++ miniupnpd-bsp32.b/upnphttp.c	2011-06-14 08:44:05.966792916 +0300
+@@ -73,6 +73,16 @@
+ 	int cmp_len;
+ 
+ 	line = h->req_buf;
++
++	/*
++	 * Check if is "ACCEPT-LANGUAGE" exist ?
++	 */
++	if (strstr(line, "ACCEPT-LANGUAGE")) {
++		h->req_AcceptLang = 1;
++	} else {
++		h->req_AcceptLang = 0;
++	}
++
+ 	/* TODO : check if req_buf, contentoff are ok */
+ 	while(line < (h->req_buf + h->req_contentoff))
+ 	{
+@@ -571,6 +581,15 @@
+ 	                         respcode, respmsg,
+ 	                         (h->respflags&FLAG_HTML)?"text/html":"text/xml",
+ 							 bodylen);
++
++	/*
++	 * If ACCEPT-LANGUAGE header is requested.
++	 */
++	if (h->req_AcceptLang) {
++		h->res_buflen += snprintf(h->res_buf + h->res_buflen,
++				h->res_buf_alloclen - h->res_buflen, "CONTENT-LANGUAGE: en\r\n");
++	}
++
+ 	/* Additional headers */
+ #ifdef ENABLE_EVENTS
+ 	if(h->respflags & FLAG_TIMEOUT) {
+diff -Naur miniupnpd-bsp32.a/upnphttp.h miniupnpd-bsp32.b/upnphttp.h
+--- miniupnpd-bsp32.a/upnphttp.h	2011-06-13 18:30:56.547116820 +0300
++++ miniupnpd-bsp32.b/upnphttp.h	2011-06-14 08:44:05.966792916 +0300
+@@ -44,6 +44,7 @@
+ 	enum httpCommands req_command;
+ 	const char * req_soapAction;
+ 	int req_soapActionLen;
++	int req_AcceptLang;
+ #ifdef ENABLE_EVENTS
+ 	const char * req_Callback;	/* For SUBSCRIBE */
+ 	int req_CallbackLen;

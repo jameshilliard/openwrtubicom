@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# Handles manual IPIP6 Tunneling
+#
+
+START=100
+STOP=1
+
+start() {
+	/sbin/tunnellingscript start
+}
+
+stop() {
+	/sbin/tunnellingscript stop
+}    

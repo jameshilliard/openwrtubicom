@@ -1,0 +1,43 @@
+Index: luci-0.10+svn6791/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci-0.10+svn6791.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua	2011-01-24 09:37:06.000000000 +0200
++++ luci-0.10+svn6791/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua	2011-06-01 12:39:45.000000000 +0300
+@@ -166,12 +166,15 @@
+ 
+ 	mode = s:taboption("advanced", ListValue, "hwmode", translate("Mode"))
+ 	mode:value("", translate("auto"))
+-	if hw_modes.b then mode:value("11b", "802.11b") end
+-	if hw_modes.g then mode:value("11g", "802.11g") end
+-	if hw_modes.a then mode:value("11a", "802.11a") end
+-	if hw_modes.g then mode:value("11bg", "802.11b+g") end
+-	if hw_modes.g then mode:value("11gst", "802.11g + Turbo") end
+-	if hw_modes.a then mode:value("11ast", "802.11a + Turbo") end
++	mode:value("11b", "802.11b")
++	mode:value("11g", "802.11g")
++	mode:value("11a", "802.11a")
++	mode:value("11NAHT20", "802.11na 20 MHz")
++	mode:value("11NAHT40PLUS", "802.11na 40PLUS MHz")
++	mode:value("11NAHT40MINUS", "802.11na 40MINUS MHz")
++	mode:value("11NGHT20", "802.11ng 20 MHz")
++	mode:value("11NGHT40PLUS", "802.11ng 40PLUS MHz")
++	mode:value("11NGHT40MINUS", "802.11ng 40MINUS MHz")
+ 	mode:value("fh", translate("Frequency Hopping"))
+ 
+ 	s:taboption("advanced", Flag, "diversity", translate("Diversity")).rmempty = false
+Index: luci-0.10+svn6791/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua
+===================================================================
+--- luci-0.10+svn6791.orig/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-06-01 12:39:25.000000000 +0300
++++ luci-0.10+svn6791/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-06-01 12:40:08.000000000 +0300
+@@ -167,6 +167,12 @@
+ 	mode:value("11g", "802.11g")
+ 	mode:value("11a", "802.11a")
+ 	mode:value("11bg", "802.11b+g")
++	mode:value("11NAHT20", "802.11na 20 MHz")
++	mode:value("11NAHT40PLUS", "802.11na 40PLUS MHz")
++	mode:value("11NAHT40MINUS", "802.11na 40MINUS MHz")
++	mode:value("11NGHT20", "802.11ng 20 MHz")
++	mode:value("11NGHT40PLUS", "802.11ng 40PLUS MHz")
++	mode:value("11NGHT40MINUS", "802.11ng 40MINUS MHz")
+ 	mode.rmempty = true
+ end
+ 

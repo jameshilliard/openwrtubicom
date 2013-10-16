@@ -1,0 +1,19 @@
+diff -ru luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua
+--- luci-0.10+svn6791-old/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-01-20 14:38:32.000000000 +0200
++++ luci-0.10+svn6791-new/applications/luci-firewall/luasrc/model/cbi/luci_fw/zones.lua	2011-02-15 10:58:14.000000000 +0200
+@@ -30,6 +30,7 @@
+ 
+ s:tab("general", translate("General Settings"))
+ s:tab("custom", translate("Custom Rules"))
++s:tab("advanced", translate("Advanced"))
+ 
+ 
+ s:taboption("general", Flag, "syn_flood", translate("Enable SYN-flood protection"))
+@@ -66,6 +67,7 @@
+ 	nixio.fs.writefile("/etc/firewall.user", value)
+ end
+ 
++s:taboption("advanced", Flag, "wan_ping", translate("Enable WAN Ping"))
+ 
+ s = m:section(TypedSection, "zone", translate("Zones"))
+ s.template = "cbi/tblsection"

@@ -1,0 +1,42 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua	2011-02-10 11:43:57.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_network/wireless.lua	2011-02-10 11:49:40.000000000 +0200
+@@ -58,9 +58,14 @@
+ protocol = s:option(DummyValue, "_protocol", translate("Protocol"))
+ function protocol.cfgvalue(self, section)
+ 	local ifname = self.map:get(section, "ifname")
+-	local cmd = "iwgetid " .. ifname .. " -p"
+-        cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
+-        return luci.util.exec(cmd)
++	-- To prevent error if no wireless iface exist
++	if ifname then
++		local cmd = "iwgetid " .. ifname .. " -p"
++	    cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
++	    return luci.util.exec(cmd)
++	else
++		return "-"
++	end
+ end
+ 
+ mode = s:option(DummyValue, "mode", translate("Mode"))
+diff -ru luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua
+--- luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-02-10 11:43:57.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/wifi.lua	2011-02-10 11:50:29.000000000 +0200
+@@ -75,9 +75,14 @@
+ protocol = s:option(DummyValue, "_protocol", translate("Protocol"))
+ function protocol.cfgvalue(self, section)
+ 	local ifname = self.map:get(section, "ifname")
+-	local cmd = "iwgetid " .. ifname .. " -p"
+-        cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
+-        return luci.util.exec(cmd)
++	-- To prevent error if no wireless iface exist
++	if ifname then
++		local cmd = "iwgetid " .. ifname .. " -p"
++	    cmd = cmd .. " | cut -d: -f2 | tr '\"' ' '"
++	    return luci.util.exec(cmd)
++	else
++		return "-"
++	end
+ end
+ 
+ mode = s:option(DummyValue, "mode", translate("Mode"))

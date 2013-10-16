@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+START=50
+
+config_load /etc/config/network
+
+DEFAULT=/etc/default/pppoe-relay
+
+start() {
+	config_get enabled lan pppoe_passthrough
+        if [ $enabled -ne 1 ]; then
+                echo "PPPoE Passthrough disabled"
+                exit 1
+        fi
+
+	[ -f $DEFAULT ] && . $DEFAULT
+	pppoe-relay $OPTIONS
+}
+
+stop() {
+	P=`ps | grep "pppoe-relay" | grep -v grep`
+        if [ "$P" != "" ]; then
+		killall pppoe-relay
+	fi
+}
+

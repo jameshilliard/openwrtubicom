@@ -1,0 +1,21 @@
+diff -u tcp_wrappers_7.6-old/Makefile tcp_wrappers_7.6-new/Makefile
+--- tcp_wrappers_7.6-old/Makefile	2011-01-27 12:04:57.000000000 +0200
++++ tcp_wrappers_7.6-new/Makefile	2011-01-27 12:05:55.000000000 +0200
+@@ -689,7 +689,7 @@
+ shared/%.o: %.c
+ 	$(CC) $(CFLAGS) $(SHCFLAGS) -c $< -o $@
+ 
+-OPT_CFLAGS = -O2 -g
++OPT_CFLAGS += -O2 -g
+ CFLAGS	= $(OPT_CFLAGS) -DFACILITY=$(FACILITY) $(ACCESS) $(PARANOID) $(NETGROUP) \
+ 	$(BUGS) $(SYSTYPE) $(AUTH) $(UMASK) \
+ 	-DREAL_DAEMON_DIR=\"$(REAL_DAEMON_DIR)\" $(STYLE) $(KILL_OPT) \
+@@ -697,7 +697,7 @@
+ 	$(UCHAR) $(TABLES) $(STRINGS) $(TLI) $(EXTRA_CFLAGS) $(DOT) \
+ 	$(VSYSLOG) $(HOSTNAME)
+ 
+-SHLINKFLAGS = -shared -Xlinker -soname -Xlinker libwrap.so.$(SOMAJOR) -lc $(LIBS)
++SHLINKFLAGS = $(LDFLAGS) -shared -Xlinker -soname -Xlinker libwrap.so.$(SOMAJOR) -lc $(LIBS)
+ SHCFLAGS = -fPIC -shared -D_REENTRANT
+ 
+ LIB_OBJ= hosts_access.o options.o shell_cmd.o rfc931.o eval.o \

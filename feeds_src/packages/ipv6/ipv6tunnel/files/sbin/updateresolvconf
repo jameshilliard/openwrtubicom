@@ -1,0 +1,55 @@
+#!/bin/sh
+env
+
+#update resolv.conf file
+update_dns() {
+	INTERFACES="$(sh -c '                                                  
+		. /etc/functions.sh; config_load network                          
+		echo_up() { echo "$1"; }                                          
+		config_foreach echo_up interface                                  
+	')"                                                               
+	for interface in $INTERFACES; do                                         
+		if [ $interface != "loopback" ] ; then                                 
+			add_dns "$interface"                                           
+		fi                                                                     
+	done
+}
+
+
+
+# add dns entries if they are not in resolv.conf yet 
+add_dns() {                                                                                                          
+        local cfg="$1"; shift
+        remove_dns "$cfg"
+        # We may be called by pppd's ip-up which has a nonstandard umask set.                                        
+        # Create an empty file here and force its permission to 0644, otherwise                                      
+        # dnsmasq will not be able to re-read the resolv.conf.auto .
+        [ ! -f /tmp/resolv.conf.auto ] && {
+		touch /tmp/resolv.conf.auto
+	        chmod 0644 /tmp/resolv.conf.auto
+	}
+	#local dns                                                                          
+        local add
+        local dns=$(uci get network."$cfg".dns)                                                                                                    
+        for dns in $dns; do
+	        grep -qsF "nameserver $dns" /tmp/resolv.conf.auto || {                                               
+        		add="${add:+$add }$dns"                                                                      
+                        echo "nameserver $dns" >> /tmp/resolv.conf.auto        
+                }
+        done
+            
+}
+        
+# remove dns entries of the given iface                                        
+remove_dns() {                                                                 
+	local cfg="$1"                                                         
+
+	[ -n "$cfg" ] && {                                                     
+		[ -f /tmp/resolv.conf.auto ] && {                      
+        	local dns=$(uci get network."$cfg".dns)
+                for dns in $dns; do                                 
+                	sed -i -e "/^nameserver $dns$/d" /tmp/resolv.conf.auto
+		done                                                          
+                }                                                                     
+	}               
+}

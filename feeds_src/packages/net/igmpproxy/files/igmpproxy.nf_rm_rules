@@ -1,0 +1,9 @@
+
+#This file included by igmpproxy.init to disable 
+#multicast packets from wan to lan if igmpproxy is stopped.
+
+mcastnet=224.0.0.0/4
+wanif=$(uci get -P/var/state network.wan.ifname)
+lanif=$(uci get -P/var/state network.lan.ifname)
+iptables -D forwarding_rule -d $mcastnet -i $wanif -o $lanif -j ACCEPT 2>/dev/null
+iptables -D input_rule -d $mcastnet -p igmp -j ACCEPT 2>/dev/null

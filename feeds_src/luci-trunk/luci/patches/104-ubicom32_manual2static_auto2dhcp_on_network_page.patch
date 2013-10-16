@@ -1,0 +1,14 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/network.lua luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/network.lua
+--- luci-0.10+svn6791-old/modules/admin-mini/luasrc/model/cbi/mini/network.lua	2011-02-14 09:06:12.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-mini/luasrc/model/cbi/mini/network.lua	2011-02-14 09:10:29.000000000 +0200
+@@ -114,8 +114,8 @@
+ p = s:option(ListValue, "proto", translate("Protocol"))
+ p.override_values = true
+ p:value("none", "disabled")
+-p:value("static", translate("manual"))
+-p:value("dhcp", translate("automatic"))
++p:value("static", "static")
++p:value("dhcp", "DHCP")
+ if has_pppoe then p:value("pppoe", "PPPoE") end
+ if has_pptp  then p:value("pptp",  "PPTP")  end
+ if has_l2tp  then p:value("l2tp",  "L2TP")  end

@@ -1,0 +1,12 @@
+diff -ru luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua
+--- luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua	2011-02-10 16:01:42.000000000 +0200
++++ luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua	2011-02-10 16:18:07.000000000 +0200
+@@ -178,6 +178,8 @@
+ 		elseif s.type == "lnk" then
+ 			return directory( fs.readlink(val), seen )
+ 		end
++	else
++		return fs.mkdir( val )
+ 	end
+ 
+ 	return false

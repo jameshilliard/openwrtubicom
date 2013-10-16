@@ -1,0 +1,16 @@
+diff -urN wide-dhcpv6-20080615-orig/Makefile.in wide-dhcpv6-20080615/Makefile.in
+--- wide-dhcpv6-20080615-orig/Makefile.in	2011-02-14 12:13:05.915530756 +0200
++++ wide-dhcpv6-20080615/Makefile.in	2011-02-14 12:14:00.455031262 +0200
+@@ -36,9 +36,10 @@
+ user= @user@
+ group= @group@
+ 
+-CFLAGS=	@CFLAGS@ @DEFS@ -DSYSCONFDIR=\"${sysconfdir}\" \
++CFLAGS+=	@CFLAGS@ @DEFS@ -DSYSCONFDIR=\"${sysconfdir}\" \
+ 	-DLOCALDBDIR=\"${localdbdir}\" $(EXTRA_CFLAGS)
+-LDFLAGS=@LDFLAGS@
++CPPFLAGS+=@CPPFLAGS@
++LDFLAGS+=@LDFLAGS@
+ LIBOBJS=@LIBOBJS@
+ LIBS=	@LIBS@ @LEXLIB@
+ CC=	@CC@

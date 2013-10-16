@@ -1,0 +1,12 @@
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/system.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/system.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_system/system.lua	2011-02-14 11:48:52.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_system/system.lua	2011-02-14 12:07:50.000000000 +0200
+@@ -203,7 +203,7 @@
+ 	translate("The following files are detected by the system and will be kept automatically during sysupgrade"))
+ 
+ f:tab("custom", translate("Custom Files"),
+-	translate("This is a list of shell glob patterns for matching files and directories to include during sysupgrade"))
++	translate("This is a list of shell glob patterns for matching files and directories to include during sysupgrade.(To remove an entry, clear it\'s content.)"))
+ 
+ d = f:taboption("detected", DummyValue, "_detected", translate("Detected files"))
+ d.rawhtml = true

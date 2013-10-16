@@ -1,0 +1,263 @@
+#!/bin/sh
+
+start() {
+	# Start tunneling script if tunneling is enabled.
+	# Tunnel Type is 0 for DS-Lite, 2 for 6rd and 3 when disabled.
+	TunnelType=$(uci get mantun.general.TunnelType)
+	if [ $TunnelType -eq 3 ]; then
+		echo "Tunneling not enabled. Exiting tunneling script."
+		exit 1
+	fi
+
+	# We support PPPoE WAN mode only for 6rd tunneling and tunnel is established by a script at /etc/ppp-ip-up.d
+	# in this case. So, we exit here without doing anything.
+	networkwanproto=$(uci get network.wan.proto)
+	# tunnel mode is static(0) or dhcp(1)
+	TunnelMode=$(uci get mantun.general.TunnelMode)
+
+	if [  $networkwanproto == 'pppoe' ]; then
+		if [ $TunnelType -eq 2 ]; then # is tunnel type 6rd
+			if [ $TunnelMode -eq 0 ]; then # if its static 6rd tunnel
+				echo "6rd tunnel will be established later when PPPoE connection is UP!"
+			else
+				# create 6rd tunnel in dhcp mode	
+				echo "Wan is in PPPoE mode and 6rd tunneling is in DHCP mode"
+				echo "Invalid to set 6rd to DHCP mode when WAN mode is PPPoE. Exiting tunneling script."
+			fi
+		else
+			echo "PPPoE WAN mode is supported only for 6rd tunneling! Exiting tunneling script."
+		fi
+		exit 1
+	fi
+	
+	echo "Start tunnelingscript" 
+
+	# Clean up before starting tunnel.
+	cleanup
+
+	# Disable wanmon so that it will not be triggered again later.
+	uci set network.wanmon.enabled=0
+	uci commit network
+
+	# check if WAN IPv4 is dhcp or static
+	# if it is static, get value from /etc/config/network write to /tmp/tunnel and 6rd calc and create tunnel
+	# if it is dhcp, then follow the below sequence.
+	networkwanipaddr=$(uci get network.wan.ipaddr)
+	networkwanifname=$(uci get network.wan.ifname)
+
+	if [  $networkwanproto == 'static' ]; then
+		if [ $TunnelType -eq 2 ]; then # is tunnel type 6rd
+			if [ $TunnelMode -eq 0 ]; then # if its static 6rd tunnel
+				echo "create static 6rd tunnel with static Wan Ipv4"
+				#cp /etc/config/mantun /tmp/tunnel
+
+				uci -c /tmp/ set tunnel.static.WANip4addr="${networkwanipaddr}"
+				uci -c /tmp/ commit tunnel
+
+				echo "create 6rd tunnel"
+				/sbin/create6rdtunnelcalc.sh
+				tcpmssrewrite
+			else
+				echo "Echo Invalid option of static WAN addr and DHCP 6rd tunneling mode selected. Hence No tunnel will be created." | /usr/bin/logger	
+			fi
+		elif [ $TunnelType -eq 0 ]; then  # is tunnel type Ds-Lite
+			if [ $TunnelMode -eq 0 ]; then
+				echo "create static DS-Lite tunnel with static Wan Ipv4 & WAN is in DHCP mode"
+				#cp /etc/config/mantun /tmp/tunnel
+				/sbin/createdslitetunnelcalc.sh	
+			fi
+		else
+				echo "Echo Invalid option of static WAN addr and DHCP Ds-Lite tunneling mode selected. Hence No tunnel will be created." | /usr/bin/logger
+		fi
+		exit 0
+	fi
+
+
+	if [  $networkwanproto == 'dhcp' ]; then	   
+		if [ $TunnelType -eq 2 ]; then # if type is 6rd then
+			if [ $TunnelMode -eq 0 ]; then # if its static 6rd tunnel
+				# create 6rd tunnel in static mode
+				# even in static mode take values from dhcp for IP-Addr and
+				echo "Wan is in DHCP mode and 6rd tunneling is in static mode"
+				/usr/sbin/dhclient  -d  -cf /etc/dhclient4-stat.conf  -sf /sbin/dhclient4stat-script $networkwanifname &
+			else
+				# create 6rd tunnel in dhcp mode	
+				echo "Wan is in DHCP mode and 6rd tunneling is in DHCP mode"
+				/usr/sbin/dhclient  -d  -cf /etc/dhclient4.conf  -sf /sbin/dhclient4-script $networkwanifname &
+			fi		
+		elif [ $TunnelType -eq 0 ]; then  # if type is Ds-lite then
+			
+			if [ $TunnelMode -eq 0 ]; then # if its static Ds-lite tunnel
+				# create Ds-lite  tunnel in static mode
+				# even in static mode take values from dhcp for IP-Addr and
+				echo "Wan is in DHCP mode and Ds-lite  tunneling is in static mode"
+				#/usr/sbin/dhclient -6 -cf /etc/dhclient6.conf -sf /sbin/dhclient6static-script $networkwanifname -P -N  &	
+				/sbin/createdslitetunnelcalc.sh
+			else
+				# create Ds-lite  tunnel in dhcp mode	
+				echo "Wan is in DHCP mode and Ds-lite  tunneling is in DHCP mode"
+				/usr/sbin/dhclient -6 -cf /etc/dhclient6.conf -sf /sbin/dhclient6static-script $networkwanifname -P -N  &
+				#createtunnel.sh #create
+			fi
+		else
+			echo "6rd & DS-Lite tunnelling is disabled while wan is in DHCP mode"
+			# start both dhcp v4 and dhcpv6 here as no tunnel type is enabled. which is being handled in the first IF-CASE of this script.
+			
+		fi
+		tcpmssrewrite
+		exit 0;
+	fi
+
+	echo NetworkWanProto $networkwanproto 
+	echo NetworkWanIpAddr $networkwanipaddr
+	echo NetworkWanIfname $networkwanifname
+}
+
+stop() {
+	[ ! -f /tmp/tunnel_script_has_started ] && {
+		echo "Tunnel script has not started. Skip tunnel stop."
+		exit 0
+	}
+	
+	echo "Stop tunneling"
+	# Delete tunnels
+	echo "Delete existing 6rd and DS-Lite tunnels, if any"
+	/sbin/deletetunnel.sh
+	
+	echo "Flush global IPv6 addresses and delete default dslite route."
+	ip -f inet6 addr flush dev br-lan scope global
+	ip -f inet6 addr flush dev eth1 scope global
+	ip route del default dev dslite
+
+	# Kill radvd started by ipv6tunnel scripts.
+	echo "Kill radvd"
+	killall -9 radvd
+	rm /tmp/radvd.conf
+
+	# Kill dhcpv6 clients started by ipv6tunnel scripts.
+	echo "Kill all dhclient processes"
+	if [ -d /var/db ]; then
+		rm /var/db/dhclient.leases
+		rm /var/db/dhclient6.leases
+	fi
+	killall -9 dhclient
+
+	# Restart radvd with default settings.
+	echo "Restart radvd script to run radvd with default settings"
+	/etc/init.d/radvd start
+	
+	# Enable wanmon. We had disabled it previously while starting tunneling.
+	uci set network.wanmon.enabled=1
+	uci commit network
+	
+	# Tunneling is stopped. We can now run ifplugd, if not already running.
+	# Running wanmon here is not necessary, because it is run in network start/restart anyway.
+	ifplugd_running=`ps | grep ifplugd | grep -v grep`
+	if [ -z $ifplugd_running ]; then
+		/etc/init.d/ifplugd start
+	fi
+	
+	rm /tmp/tunnel_script_has_started
+}
+
+cleanup()
+{
+	# Stop SE, NA, ifplugd and wanmon. They cause trouble for tunneling.
+	echo "Stop SE and NA"
+	/etc/init.d/se_stop
+	/etc/init.d/na_stop
+	/etc/init.d/ifplugd stop
+	killall -9 wanmon
+
+	if [ -d /var/db ]; then 
+		echo "No need to create /var/db"	
+	else
+		mkdir /var/db/
+	fi
+	
+	echo "" > /var/db/dhclient.leases
+	echo "" > /var/db/dhclient6.leases
+	killall -9 dhclient
+	killall -9 dhcp6c
+	killall -9 udhcpc
+	touch /tmp/tunnel_script_has_started
+	cp /etc/config/mantun /tmp/tunnel 
+	# Do All cleanup job here
+	/sbin/deletetunnel.sh
+	killall -9 radvd
+
+	ip -f inet6 addr flush dev br-lan scope global
+	lanProto=$(uci get network.lan.proto)
+	if [ $lanProto == "static" ]; then
+		lanIpv6addr=$(uci get network.lan.ip6addr)
+		if [ -z $lanIpv6addr ]; then
+			echo "No IPv6 Address assigned to br-lan"
+		else
+			ip -6 addr add $lanIpv6addr dev br-lan
+		fi
+	fi
+	# Remove old radvd configuration
+	rm /tmp/radvd.conf
+	if [ $TunnelType -eq 3 ]; then
+		wanProto=$(uci get network.wan.proto)
+		if [ $wanProto == "static" ]; then
+			wanIp6gw=$(uci get network.wan.ip6gw)
+			if [ -z $wanIp6gw ]; then
+				echo "No IPv6 Address assigned to wan"
+			else
+				ip -6 route del default
+				ip -6 route del default
+				ip -6 route add default via $wanIp6gw
+			fi
+		fi
+	fi
+
+	echo "cleanup called"
+	echo ${new_ip_address} > /tmp/new_ip_address
+	echo ${new_subnet_mask} > /tmp/new_subnet_mask
+	echo ${new_6rdbr} > /tmp/new_6rdbr
+	echo ${new_6rdprefix} > /tmp/new_6rdprefix
+	echo ${new_6rdipv4masklength} > /tmp/new_6rdipv4masklength
+	if [ ${restartTunnelFirewall} -eq 1 ]; then 
+		/etc/init.d/firewall restart
+	fi
+	return;
+}
+
+tcpmssrewrite()
+{
+	if [ $TunnelType -eq 2 ]; then # only if 6rd tunneling is enable do mss-rewrite
+		if [ $TunnelMode -eq 0 ]; then # if its static 6rd tunnel
+			MSSOptionRewrite=$(uci get mantun.static.MSSOptionRewrite)
+			i6rdMTU=$(uci get mantun.static.i6rdMTU)
+		else
+			MSSOptionRewrite=$(uci get mantun.overridetunnel.MSSOptionRewrite)
+			i6rdMTU=$(uci get mantun.overridetunnel.i6rdMTU)
+		fi  
+
+
+		if [ $MSSOptionRewrite -eq 1 ]; then 
+			# if equalsone then do TCP-MSS
+			echo "enabling TCPMSS" 
+			#ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o br-lan -j TCPMSS  --set-mss `expr "$i6rdMTU" - 60`		  
+			ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o br-lan -j TCPMSS --clamp-mss-to-pmtu
+		else
+			#disable the TCP mss feature 
+			echo "disabling TCPMSS"
+			#ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o br-lan -j TCPMSS  --set-mss `expr "$i6rdMTU" - 60`		  
+			ip6tables -t mangle -D POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o br-lan -j TCPMSS --clamp-mss-to-pmtu
+		fi 
+	fi	      
+return;
+}
+
+# Call the requested function
+if [ "$1" == "start" ]; then
+	start
+elif [ "$1" == "stop" ]; then
+	stop
+elif [ "$1" == "cleanup" ]; then
+	cleanup
+else
+	echo "Function $1 not defined in tunnellingscript. Exiting."
+fi

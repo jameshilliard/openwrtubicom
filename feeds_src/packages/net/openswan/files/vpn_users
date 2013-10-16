@@ -1,0 +1,15 @@
+#
+# username/password database to be used by VPN profile
+#
+config user
+	option username	"guest1"
+	option passwd	"guest"
+
+config user
+	option username	"guest2"
+	option passwd	"mypass"
+
+config user
+	option username	"guest3"
+	option passwd	"password"
+

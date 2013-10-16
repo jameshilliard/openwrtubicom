@@ -1,0 +1,32 @@
+diff -ru luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua
+--- luci-0.10+svn6791-old/libs/web/luasrc/cbi/datatypes.lua	2010-12-16 17:59:25.000000000 +0200
++++ luci-0.10+svn6791-new/libs/web/luasrc/cbi/datatypes.lua	2011-02-10 15:41:55.000000000 +0200
+@@ -97,6 +97,11 @@
+ 	return ( val and val >= 1 and val <= 65535 )
+ end
+ 
++function port0(val)
++	val = tonumber(val)
++	return ( val and val >= 0 and val <= 65535 )
++end
++
+ function portrange(val)
+ 	local p1, p2 = val:match("^(%d+)%-(%d+)$")
+ 	if p1 and p2 and port(p1) and port(p2) then
+diff -ru luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua
+--- luci-0.10+svn6791-old/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua	2010-11-17 02:06:40.000000000 +0200
++++ luci-0.10+svn6791-new/modules/admin-full/luasrc/model/cbi/admin_services/dnsmasq.lua	2011-02-10 15:41:13.000000000 +0200
+@@ -137,11 +137,11 @@
+ 
+ 
+ pt = s:taboption("advanced", Value, "port",
+-	translate("<abbr title=\"Domain Name System\">DNS</abbr> server port"),
++	translate("<abbr title=\"Domain Name System\">DNS</abbr> server port (set 0 to disable DNS relay)"),
+ 	translate("Listening port for inbound DNS queries"))
+ 
+ pt.optional = true
+-pt.datatype = "port"
++pt.datatype = "port0"
+ pt.placeholder = 53
+ 
+ 

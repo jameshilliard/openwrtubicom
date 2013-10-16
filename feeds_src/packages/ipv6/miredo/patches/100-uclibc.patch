@@ -1,0 +1,12 @@
+diff -urN miredo-1.1.6/libteredo/maintain.c miredo-1.1.6.new/libteredo/maintain.c
+--- miredo-1.1.6/libteredo/maintain.c	2009-04-13 11:15:15.000000000 +0200
++++ miredo-1.1.6.new/libteredo/maintain.c	2009-05-26 16:37:14.000000000 +0200
+@@ -59,7 +59,7 @@
+ 
+ static inline void gettime (struct timespec *now)
+ {
+-#if (_POSIX_CLOCK_SELECTION - 0 >= 0) && (_POSIX_MONOTONIC_CLOCK - 0 >= 0)
++#if (_POSIX_CLOCK_SELECTION - 0 >= 0) && (_POSIX_MONOTONIC_CLOCK - 0 >= 0) && !defined(__UCLIBC__)
+ 	if (clock_gettime (CLOCK_MONOTONIC, now) == 0)
+ 		return;
+ #else

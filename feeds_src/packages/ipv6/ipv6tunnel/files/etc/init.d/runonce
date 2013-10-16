@@ -1,0 +1,39 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+START=49
+STOP=49
+
+boot() {
+	start
+}
+
+start() {
+	# Add firewall rule for IPv6 on WAN interface.
+	echo "config rule" >> /etc/config/firewall
+	echo "	option src		wan" >> /etc/config/firewall
+	echo "	option proto		41" >> /etc/config/firewall
+	echo "	option target		ACCEPT" >> /etc/config/firewall
+	echo "	option forward		ACCEPT" >> /etc/config/firewall
+	echo "	option input		ACCEPT" >> /etc/config/firewall
+	echo "	option output		ACCEPT" >> /etc/config/firewall
+
+	# Disable auto start of these scripts. They will be run later when 
+	# needed.
+	/etc/init.d/dhclient6 disable
+	/etc/init.d/dhclient disable
+	/etc/init.d/tunnelscript disable
+
+	# This script will not be run again. Remove it.
+	/etc/init.d/runonce disable
+	rm -f /etc/init.d/runonce
+}
+
+stop() {
+	echo "Nothing to be done in stop"
+}
+
+restart() {
+	start
+}
+
