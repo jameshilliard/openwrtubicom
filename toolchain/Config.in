@@ -84,9 +84,7 @@ menuconfig EXTERNAL_TOOLCHAIN
 config COMPILE_CLIBRARY_WITH_EXTERNAL_TOOLCHAIN
 	bool
 	prompt "Compile C library from source with external toolchain"
-	depends DEVEL && !NATIVE_TOOLCHAIN && !NEED_TOOLCHAIN &&
-
-TARGET_ubicom32
+	depends DEVEL && !NATIVE_TOOLCHAIN && !NEED_TOOLCHAIN && TARGET_ubicom32
 	select TOOLCHAINOPTS
 	default y if ubicom32
 	default n
