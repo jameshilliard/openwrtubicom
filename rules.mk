@@ -164,6 +164,39 @@ else
   SOFT_FLOAT_CONFIG_OPTION:=
 endif
 
+# quick and dirty solutions
+ifeq ($(ARCH),ubicom32)
+KERNEL_CROSS = ubicom32-elf-
+KERNEL_CC = ubicom32-elf-gcc
+TARGET_CROSS = ubicom32-linux-uclibc-
+TARGET_CC = ubicom32-linux-uclibc-gcc
+CROSS_COMPILE = ubicom32-linux-uclibc-
+GNU_TARGET_NAME = ubicom32-linux-uclibc
+# KERNEL_CROSS = ubicom32-elf-
+# TARGET_CROSS = ubicom32-elf-
+# TARGET_CC = ubicom32-elf-gcc
+# CROSS_COMPILE = ubicom32-elf-
+# GNU_TARGET_NAME = ubicom32-elf-linux
+#EXTRA_CFLAGS += --spec $(TOPDIR)/target/linux/ubicom32/image/spec
+#EXTRA_LDFLAGS += -L$(dir $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name)) $(TOOLCHAIN_DIR)/lib/crt1.o -Wl,-elf2flt -g -static
+EXTRA_LDFLAGS += -L$(dir $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name)) -g 
+EXTRA_LDLIBS += -lc -lgcc
+TARGET_CPPFLAGS += -I$(BUILD_DIR_TOOLCHAIN)/uClibc_dev/usr/include
+# TARGET_CFLAGS += -I$(BUILD_DIR_TOOLCHAIN)/uClibc_dev/usr/include
+# CFLAGS  += -g
+# CFLAGS  += -fno-common -fno-builtin -Wall
+# CFLAGS  += -I$(ROOTDIR)/include
+CFLAGS  += -I$(BUILD_DIR_TOOLCHAIN)/uClibc_dev/usr/include -Os -pipe -g -fomit-frame-pointer -fno-common -fno-builtin
+# CFLAGS  += -I$(ROOTDIR)/lib/zlib
+#LDFLAGS += -L$(dir $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name)) $(TOOLCHAIN_DIR)/lib/crt1.o -Wl,-elf2flt -g -static
+#???? TARGET_LDFLAGS += -L$(dir $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name)) $(TOOLCHAIN_DIR)/lib/crt1.o -Wl,-elf2flt -g -static
+# LDFLAGS += -Wl,-elf2flt -g -static -L$(TOOLCHAIN_DIR)/lib -L$(dir $(shell $(TARGET_CC) $(TARGET_CFLAGS) -print-libgcc-file-name))
+# LDFLAGS += $(TOOLCHAIN_DIR)/lib/crt1.o
+# LDFLAGS += -L$(TOOLCHAIN_DIR)/lib
+# LDLIBS  += -lc -lgcc
+UCLIBC_VERSION=0.9.30.1
+endif
+
 export PATH:=$(TARGET_PATH)
 export STAGING_DIR
 export SH_FUNC:=. $(INCLUDE_DIR)/shell.sh;
