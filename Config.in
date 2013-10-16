@@ -16,6 +16,8 @@ menu "Target Images"
 
 	menuconfig TARGET_ROOTFS_INITRAMFS
 		bool "ramdisk"
+		default y if TARGET_ubicom32
+		depends LINUX_2_6
 		default y if USES_INITRAMFS
 		help
 		  Embed the rootfs into the kernel (initramfs)
@@ -444,10 +446,12 @@ endmenu
 
 menuconfig DEVEL
 	bool "Advanced configuration options (for developers)"
+	default y if TARGET_ubicom32
 	default n
 
 	config BROKEN
 		bool "Show broken platforms / packages" if DEVEL
+		default y if TARGET_ubicom32
 		default n
 
 	config DOWNLOAD_FOLDER
