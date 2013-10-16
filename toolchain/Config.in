@@ -3,7 +3,7 @@
 menuconfig EXTERNAL_TOOLCHAIN
 	bool
 	prompt "Use external toolchain"  if DEVEL
-	default y if TARGET_ubicom32
+	default y if DEVEL && TARGET_ubicom32
 	help
 	  If enabled, OpenWrt will compile using an existing toolchain instead of compiling one
 
